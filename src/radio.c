@@ -24,11 +24,15 @@
 #include <math.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <termios.h>
+#endif
 
 #include <wdsp.h>
 
@@ -2458,10 +2462,11 @@ void radioRestoreState() {
     GetPropI1("rigctl_serial_andromeda[%d]", id,             SerialPorts[id].andromeda);
     GetPropI1("rigctl_serial_baud_rate[%i]", id,             SerialPorts[id].baud);
     GetPropS1("rigctl_serial_port[%d]", id,                  SerialPorts[id].port);
-
+#ifndef _WIN32 // write...
     if (SerialPorts[id].andromeda) {
       SerialPorts[id].baud = B9600;
     }
+#endif
   }
 
   for (int i = 0; i < n_adc; i++) {

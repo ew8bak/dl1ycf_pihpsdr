@@ -187,7 +187,11 @@ ACTION_TABLE ActionTable[] = {
   {RX1,                 "RX1",                  "RX1",          MIDI_KEY   | CONTROLLER_SWITCH},
   {RX2,                 "RX2",                  "RX2",          MIDI_KEY   | CONTROLLER_SWITCH},
   {SAT,                 "SAT",                  "SAT",          MIDI_KEY   | CONTROLLER_SWITCH},
+#ifdef _WIN32
+  {SNBw,                "SNB",                  "SNB",          MIDI_KEY   | CONTROLLER_SWITCH},
+#else
   {SNB,                 "SNB",                  "SNB",          MIDI_KEY   | CONTROLLER_SWITCH},
+#endif
   {SPLIT,               "Split",                "SPLIT",        MIDI_KEY   | CONTROLLER_SWITCH},
   {SQUELCH,             "Squelch",              "SQUELCH",      MIDI_KNOB  | MIDI_WHEEL | CONTROLLER_ENCODER},
   {SQUELCH_RX1,         "Squelch\nRX1",         "SQUELCH1",     MIDI_KNOB  | MIDI_WHEEL | CONTROLLER_ENCODER},
@@ -245,11 +249,19 @@ static inline double KnobOrWheel(const PROCESS_ACTION *a, double oldval, double 
   //  - rounded to a multiple of inc
   //
   switch (a->mode) {
+#ifdef _WIN32
+  case RELATIVEwin:
+#else
   case RELATIVE:
+#endif
     oldval += a->val * inc;
     break;
 
+#ifdef _WIN32
+  case ABSOLUTEwin:
+#else
   case ABSOLUTE:
+#endif
     oldval = minval + a->val * (maxval - minval) * 0.01;
     break;
 
@@ -1281,7 +1293,11 @@ int process_action(void *data) {
 
     break;
 
+#ifdef _WIN32
+  case SNBw:
+#else
   case SNB:
+#endif
     if (a->mode == PRESSED) {
       if (active_receiver->snb == 0) {
         active_receiver->snb = 1;

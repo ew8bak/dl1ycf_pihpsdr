@@ -23,7 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <semaphore.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <wdsp.h>
 

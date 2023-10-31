@@ -21,9 +21,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif
 #include <wdsp.h>
 
 #include "new_menu.h"

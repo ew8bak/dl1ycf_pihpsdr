@@ -25,6 +25,12 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2tcpip.h>
+#include <pthread.h>
+#else
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
@@ -32,11 +38,11 @@
 #include <netdb.h>
 #include <net/if_arp.h>
 #include <net/if.h>
-#include <netinet/ip.h>
 #include <ifaddrs.h>
+#include <sys/select.h>
+#endif
 #include <semaphore.h>
 #include <math.h>
-#include <sys/select.h>
 #include <signal.h>
 
 #include <wdsp.h>
@@ -518,7 +524,9 @@ void new_protocol_init(int pixels) {
     int optval = 1;
     socklen_t optlen = sizeof(optval);
     setsockopt(data_socket, SOL_SOCKET, SO_REUSEADDR, &optval, optlen);
+#ifndef _WIN32
     setsockopt(data_socket, SOL_SOCKET, SO_REUSEPORT, &optval, optlen);
+#endif
     //
     // We need a receive buffer with a decent size, to be able to
     // store several incoming packets if they arrive in a burst.

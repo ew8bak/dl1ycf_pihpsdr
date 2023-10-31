@@ -20,16 +20,22 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2tcpip.h>
+#include <pthread.h>
+#else
 #include <sys/socket.h>
 #include <sys/ioctl.h>
-#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <net/if_arp.h>
 #include <net/if.h>
-#include <netinet/ip.h>
 #include <ifaddrs.h>
+#endif
 #include <semaphore.h>
 #include <string.h>
 #include <errno.h>
@@ -484,11 +490,11 @@ static void open_udp_socket() {
   if (setsockopt(tmp, SOL_SOCKET, SO_REUSEADDR, &optval, optlen) < 0) {
     t_perror("data_socket: SO_REUSEADDR");
   }
-
+#ifndef _WIN32
   if (setsockopt(tmp, SOL_SOCKET, SO_REUSEPORT, &optval, optlen) < 0) {
     t_perror("data_socket: SO_REUSEPORT");
   }
-
+#endif
   //
   // We need a receive buffer with a decent size, to be able to
   // store several incoming packets if they arrive in a burst.
@@ -612,9 +618,11 @@ static void open_tcp_socket() {
     t_perror("tcp_socket: SO_REUSEADDR");
   }
 
+#ifndef _WIN32
   if (setsockopt(tmp, SOL_SOCKET, SO_REUSEPORT, &optval, optlen) < 0) {
     t_perror("tcp_socket: SO_REUSEPORT");
   }
+#endif
 
   if (connect(tmp, (const struct sockaddr *)&data_addr, sizeof(data_addr)) < 0) {
     t_perror("tcp_socket: connect");

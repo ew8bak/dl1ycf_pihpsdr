@@ -22,11 +22,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <semaphore.h>
-#include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/resource.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <pthread.h>
+#else
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/resource.h>
+#endif
 #include <wdsp.h>
 
 #include "appearance.h"
@@ -57,7 +63,11 @@
 #include "mystring.h"
 #include "startup.h"
 
+#ifdef _WIN32
+//
+#else
 struct utsname unameData;
+#endif
 
 GdkScreen *screen;
 gint display_width;
@@ -77,7 +87,11 @@ static GtkWidget *status_label;
 
 void status_text(const char *text) {
   gtk_label_set_text(GTK_LABEL(status_label), text);
+#ifdef _WIN32
+  _sleep(100);
+#else
   usleep(100000);
+#endif
 
   while (gtk_events_pending ()) {
     gtk_main_iteration ();
@@ -262,7 +276,11 @@ static int init(void *data) {
   while (wisdom_running) {
     // wait for the wisdom thread to complete, meanwhile
     // handling any GTK events.
+#ifdef _WIN32
+    _sleep(100);
+#else
     usleep(100000); // 100ms
+#endif
 
     while (gtk_events_pending ()) {
       gtk_main_iteration ();
@@ -285,12 +303,20 @@ static void activate_pihpsdr(GtkApplication *app, gpointer data) {
   char text[256];
   t_print("Build: %s (Commit: %s, Date: %s)\n", build_version, build_commit, build_date);
   t_print("GTK+ version %u.%u.%u\n", gtk_major_version, gtk_minor_version, gtk_micro_version);
+#ifdef _WIN32
+  fprintf(stderr, "sysname: %s\n", "Windows 11");
+  fprintf(stderr, "nodename: %s\n", "Windows 11");
+  fprintf(stderr, "release: %s\n", "Windows 11");
+  fprintf(stderr, "version: %s\n", "Windows 11");
+  fprintf(stderr, "machine: %s\n", "x86_64");
+#else 
   uname(&unameData);
   t_print("sysname: %s\n", unameData.sysname);
   t_print("nodename: %s\n", unameData.nodename);
   t_print("release: %s\n", unameData.release);
   t_print("version: %s\n", unameData.version);
   t_print("machine: %s\n", unameData.machine);
+#endif
   load_css();
   GdkDisplay *display = gdk_display_get_default();
 
@@ -450,23 +476,39 @@ int main(int argc, char **argv) {
   GtkApplication *pihpsdr;
   int rc;
   char name[1024];
+#ifdef _WIN32
+  WORD wVersionRequested = 0x202;
+  WSADATA data;
+  if (WSAStartup(wVersionRequested, &data) != 0)
+  {
+    wprintf("WSAStartup Failed. Error Code : %d", WSAGetLastError());
+    return 1;
+  }
+#endif
   //
   // The following call will most likely fail (until this program
   // has the privileges to reduce the nice value). But if the
   // privilege is there, it may help to run piHPSDR at a lower nice
   // value.
   //
+  #ifdef _WIN32
+  //
+  #else
   rc = getpriority(PRIO_PROCESS, 0);
   t_print("Base priority on startup: %d\n", rc);
   setpriority(PRIO_PROCESS, 0, -10);
   rc = getpriority(PRIO_PROCESS, 0);
   t_print("Base priority after adjustment: %d\n", rc);
+  #endif
   startup(argv[0]);
   snprintf(name, 1024, "org.g0orx.pihpsdr.pid%d", getpid());
   //t_print("gtk_application_new: %s\n",name);
   pihpsdr = gtk_application_new(name, G_APPLICATION_FLAGS_NONE);
   g_signal_connect(pihpsdr, "activate", G_CALLBACK(activate_pihpsdr), NULL);
   rc = g_application_run(G_APPLICATION(pihpsdr), argc, argv);
+#ifdef _WIN32
+  WSACleanup();
+#endif
   t_print("exiting ...\n");
   g_object_unref(pihpsdr);
   return rc;

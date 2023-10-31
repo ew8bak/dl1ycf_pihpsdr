@@ -19,8 +19,12 @@
 #ifndef _MAIN_H
 #define _MAIN_H
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/utsname.h>
 extern struct utsname unameData;
+#endif
 
 enum {
   NO_CONTROLLER = 0,

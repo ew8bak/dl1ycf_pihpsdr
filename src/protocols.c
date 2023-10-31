@@ -23,9 +23,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <semaphore.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif
 #include "radio.h"
 #include "protocols.h"
 #include "property.h"

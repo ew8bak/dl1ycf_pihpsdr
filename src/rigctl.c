@@ -26,7 +26,6 @@
 #include <gdk/gdk.h>
 #include <fcntl.h>
 #include <string.h>
-#include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -67,10 +66,18 @@
 
 #define NEW_PARSER
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2tcpip.h>
+#include <io.h>
+#else
 // IP stuff below
 #include <sys/socket.h>
 #include <arpa/inet.h> //inet_addr
 #include <netinet/tcp.h>
+#include <termios.h>
+#endif
 
 int rigctl_port_base = 19090;
 int rigctl_enable = 0;
@@ -706,7 +713,9 @@ static gpointer rigctl_server(gpointer data) {
   }
 
   setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+  #ifndef _WIN32
   setsockopt(server_socket, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+  #endif
   // bind to listening port
   memset(&server_address, 0, sizeof(server_address));
   server_address.sin_family = AF_INET;
@@ -774,11 +783,9 @@ static gpointer rigctl_server(gpointer data) {
     // Setting TCP_NODELAY may (or may not) improve responsiveness
     // by *disabling* Nagle's algorithm for clustering small packets
     //
-#ifdef __APPLE__
-
+#ifndef __linux__
     if (setsockopt(tcp_client[spare].fd, IPPROTO_TCP, TCP_NODELAY, (void *)&on, sizeof(on)) < 0) {
 #else
-
     if (setsockopt(tcp_client[spare].fd, SOL_TCP, TCP_NODELAY, (void *)&on, sizeof(on)) < 0) {
 #endif
       t_perror("TCP_NODELAY");
@@ -5468,6 +5475,9 @@ int parse_cmd(void *data) {
 
 // Serial Port Launch
 int set_interface_attribs (int fd, int speed, int parity) {
+#ifdef _WIN32
+  // write...
+#else
   struct termios tty;
   memset (&tty, 0, sizeof tty);
 
@@ -5500,11 +5510,14 @@ int set_interface_attribs (int fd, int speed, int parity) {
     t_perror( "RIGCTL (tcsetattr):");
     return -1;
   }
-
+#endif
   return 0;
 }
 
 void set_blocking (int fd, int should_block) {
+#ifdef _WIN32
+  /// write...
+#else
   struct termios tty;
   memset (&tty, 0, sizeof tty);
   int flags = fcntl(fd, F_GETFL, 0);
@@ -5528,6 +5541,7 @@ void set_blocking (int fd, int should_block) {
   if (tcsetattr (fd, TCSANOW, &tty) != 0) {
     t_perror("RIGCTL (tcsetattr):");
   }
+#endif
 }
 
 static gpointer serial_server(gpointer data) {
@@ -5749,7 +5763,11 @@ int launch_serial (int id) {
   // Use O_NONBLOCK to prevent "hanging" upon open(), set blocking mode
   // later.
   //
+#ifdef _WIN32
+  fd = _open(SerialPorts[id].port, O_RDWR);
+#else
   fd = open (SerialPorts[id].port, O_RDWR | O_NOCTTY | O_SYNC | O_NONBLOCK);
+#endif  
 
   if (fd < 0) {
     t_perror("RIGCTL (open serial):");
@@ -5763,8 +5781,11 @@ int launch_serial (int id) {
   // hard-wired parity = NONE
   // if ANDROMEDA, hard-wired baud = 9600
   baud = SerialPorts[id].baud;
-
+#ifdef _WIN32
+// write...
+#else
   if (SerialPorts[id].andromeda) { baud = B9600; }
+#endif
 
   if (set_interface_attribs (fd, baud, 0) == 0) {
     set_blocking (fd, 1);                   // set blocking

@@ -20,6 +20,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#else
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
@@ -29,6 +35,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
+#endif
 #include <string.h>
 #include <errno.h>
 
@@ -44,7 +51,11 @@ static struct sockaddr_in interface_netmask = {0};
 #define DISCOVERY_PORT 1024
 static int discovery_socket;
 
-static void new_discover(struct ifaddrs* iface, int discflag);
+#ifdef _WIN32
+static void new_discover(int ifNum, u_long ifAddr, u_long ifNet_mask, int discflag);
+#else
+static void new_discover(struct ifaddrs *iface, int discflag);
+#endif
 
 static GThread *discover_thread_id;
 gpointer new_discover_receive_thread(gpointer data);
@@ -68,6 +79,15 @@ void print_device(int i) {
 void new_discovery() {
   struct ifaddrs *addrs,*ifa;
   int i, is_local;
+#ifdef _WIN32
+    PMIB_IPADDRTABLE pIPAddrTable;
+    pIPAddrTable = getIfAddressWin();
+    for (i = 0; i < (int)pIPAddrTable->dwNumEntries; i++)
+    {
+        g_print("\n\tSearch on Interface Index:\t%ld\n", pIPAddrTable->table[i].dwIndex);
+        new_discover(pIPAddrTable->table[i].dwIndex, (u_long)pIPAddrTable->table[i].dwAddr, pIPAddrTable->table[i].dwMask, 1);
+    }
+#else
   getifaddrs(&addrs);
   ifa = addrs;
 
@@ -97,6 +117,7 @@ void new_discovery() {
   }
 
   freeifaddrs(addrs);
+  #endif
   //
   // If an IP address has already been "discovered" via a
   // METIS broadcast package, it makes no sense to re-discover
@@ -110,9 +131,11 @@ void new_discovery() {
       is_local = 1;
     }
   }
-
+#ifdef _WIN32
+  if (!is_local) { new_discover(pIPAddrTable->table[i].dwIndex, (u_long)pIPAddrTable->table[i].dwAddr, pIPAddrTable->table[i].dwMask, 2); }
+#else
   if (!is_local) { new_discover(NULL, 2); }
-
+#endif
   t_print( "new_discovery found %d devices\n", devices);
 
   for (i = 0; i < devices; i++) {
@@ -124,7 +147,12 @@ void new_discovery() {
 // discflag = 1: send UDP broadcast packet
 // discflag = 2: send UDP packet to specified IP address
 //
-static void new_discover(struct ifaddrs* iface, int discflag) {
+#ifdef _WIN32
+static void new_discover(int ifNum, u_long ifAddr, u_long ifNet_mask, int discflag)
+#else
+static void new_discover(struct ifaddrs *iface, int discflag)
+#endif
+{
   int rc;
   struct sockaddr_in *sa;
   struct sockaddr_in *mask;
@@ -139,7 +167,12 @@ static void new_discover(struct ifaddrs* iface, int discflag) {
     //
     // prepeare socket for sending an UDP broadcast packet to interface ifa
     //
+#ifdef _WIN32
+    IN_ADDR IPAddr;
+    sprintf(interface_name, "%s %d", "Ethernet", ifNum);
+#else
     STRLCPY(interface_name, iface->ifa_name, sizeof(interface_name));
+#endif
     t_print("new_discover: looking for HPSDR devices on %s\n", interface_name);
     // send a broadcast to locate metis boards on the network
     discovery_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -149,12 +182,17 @@ static void new_discover(struct ifaddrs* iface, int discflag) {
       return;
     }
 
+#ifdef _WIN32
+    interface_netmask.sin_addr.s_addr = ifNet_mask;
+    interface_addr.sin_addr.s_addr = ifAddr;
+#else
     sa = (struct sockaddr_in *) iface->ifa_addr;
     mask = (struct sockaddr_in *) iface->ifa_netmask;
+    interface_addr.sin_addr.s_addr = sa->sin_addr.s_addr;
     interface_netmask.sin_addr.s_addr = mask->sin_addr.s_addr;
+#endif
     // bind to this interface and the discovery port
     interface_addr.sin_family = AF_INET;
-    interface_addr.sin_addr.s_addr = sa->sin_addr.s_addr;
     interface_addr.sin_port = htons(0); // system assigned port
 
     if (bind(discovery_socket, (struct sockaddr * )&interface_addr, sizeof(interface_addr)) < 0) {
@@ -163,8 +201,17 @@ static void new_discover(struct ifaddrs* iface, int discflag) {
       return;
     }
 
+#ifdef _WIN32
+    IPAddr.S_un.S_addr = ifAddr;
+    strcpy(addr, inet_ntoa(IPAddr));
+    g_print("\tIP Address:     \t%s\n", inet_ntoa(IPAddr));
+    IPAddr.S_un.S_addr = ifNet_mask;
+    strcpy(net_mask, inet_ntoa(IPAddr));
+#else
     STRLCPY(addr, inet_ntoa(sa->sin_addr), sizeof(addr));
     STRLCPY(net_mask, inet_ntoa(mask->sin_addr), sizeof(net_mask));
+#endif
+
     t_print("new_discover: bound to %s %s %s\n", interface_name, addr, net_mask);
     // allow broadcast on the socket
     int on = 1;
@@ -213,7 +260,9 @@ static void new_discover(struct ifaddrs* iface, int discflag) {
 
   int optval = 1;
   setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+#ifndef _WIN32
   setsockopt(discovery_socket, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+#endif
   rc = devices;
   // start a receive thread to collect discovery response packets
   discover_thread_id = g_thread_new( "new discover receive", new_discover_receive_thread, NULL);
@@ -230,7 +279,11 @@ static void new_discover(struct ifaddrs* iface, int discflag) {
 
   if (sendto(discovery_socket, buffer, 60, 0, (struct sockaddr * )&to_addr, sizeof(to_addr)) < 0) {
     t_perror("new_discover: sendto socket failed for discovery_socket\n");
-    close (discovery_socket);
+#ifdef _WIN32
+    closesocket(discovery_socket);
+#else
+    close(discovery_socket);
+#endif
     return;
   }
 
@@ -240,7 +293,9 @@ static void new_discover(struct ifaddrs* iface, int discflag) {
 
   switch (discflag) {
   case 1:
+#ifndef _WIN32
     t_print("new_discover: exiting discover for %s\n", iface->ifa_name);
+#endif
     break;
 
   case 2:
@@ -267,9 +322,14 @@ gpointer new_discover_receive_thread(gpointer data) {
   struct timeval tv;
   int i;
   double frequency_min, frequency_max;
+#ifdef _WIN32
+  int timeout = 2000;
+  setsockopt(discovery_socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+#else
   tv.tv_sec = 2;
   tv.tv_usec = 0;
   setsockopt(discovery_socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
+#endif
   len = sizeof(addr);
 
   while (1) {

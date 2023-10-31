@@ -148,7 +148,11 @@ enum ACTION {
   RX1,
   RX2,
   SAT,
+#ifdef _WIN32
+  SNBw,
+#else
   SNB,
+#endif
   SPLIT,
   SQUELCH,
   SQUELCH_RX1,
@@ -198,8 +202,13 @@ typedef struct _action_table {
 } ACTION_TABLE;
 
 enum ACTION_MODE {
+#ifdef _WIN32
+  RELATIVEwin,
+  ABSOLUTEwin,
+#else
   RELATIVE,
   ABSOLUTE,
+#endif
   PRESSED,
   RELEASED
 };

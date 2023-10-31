@@ -21,7 +21,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <termios.h>
+#endif
 #include <unistd.h>
 
 #include "new_menu.h"
@@ -103,7 +107,11 @@ static void andromeda_cb(GtkWidget *widget, gpointer data) {
     }
 
     gtk_combo_box_set_active(GTK_COMBO_BOX(baud_combo[id]), 1);
+#ifdef _WIN32
+    SerialPorts[id].baud = 13;
+#else
     SerialPorts[id].baud = B9600;
+#endif
   } else {
     disable_andromeda(id);
   }
@@ -142,7 +150,11 @@ static void baud_cb(GtkWidget *widget, gpointer data) {
   //
   // If ANDROMEDA is active, keep 9600
   //
+  #ifdef _WIN32
+  if (SerialPorts[id].andromeda && SerialPorts[id].baud == 13) {
+  #else
   if (SerialPorts[id].andromeda && SerialPorts[id].baud == B9600) {
+  #endif
     gtk_combo_box_set_active(GTK_COMBO_BOX(widget), 1);
     return;
   }
@@ -151,6 +163,9 @@ static void baud_cb(GtkWidget *widget, gpointer data) {
   // Do nothing if the baud rate is already effective.
   // If a serial client is already running and the baud rate is changed, we close and re-open it
   //
+#ifdef _WIN32
+// write...
+#else
   switch (bd) {
   case 0:
   default:
@@ -169,7 +184,7 @@ static void baud_cb(GtkWidget *widget, gpointer data) {
     new = B38400;
     break;
   }
-
+#endif
   if (new == SerialPorts[id].baud) {
     return;
   }
@@ -248,7 +263,9 @@ void rigctl_menu(GtkWidget *parent) {
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(baud_combo[i]), NULL, "9600 Bd");
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(baud_combo[i]), NULL, "19200 Bd");
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(baud_combo[i]), NULL, "38400 Bd");
-
+#ifdef _WIN32
+// write...
+#else
     switch (SerialPorts[i].baud) {
     case B9600:
       gtk_combo_box_set_active(GTK_COMBO_BOX(baud_combo[i]), 1);
@@ -266,6 +283,7 @@ void rigctl_menu(GtkWidget *parent) {
       SerialPorts[i].baud = B4800;
       gtk_combo_box_set_active(GTK_COMBO_BOX(baud_combo[i]), 0);
     }
+#endif
 
     my_combo_attach(GTK_GRID(grid), baud_combo[i], 3, row, 1, 1);
     g_signal_connect(baud_combo[i], "changed", G_CALLBACK(baud_cb), GINT_TO_POINTER(i));
