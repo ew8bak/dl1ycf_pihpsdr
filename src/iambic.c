@@ -178,12 +178,16 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <fcntl.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <poll.h>
+#include <sys/mman.h>
+#endif
 #include <sched.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
-#include <sys/mman.h>
 
 #include "gpio.h"
 #include "radio.h"

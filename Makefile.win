@@ -375,7 +375,6 @@ endif
 #
 # The core *.c files in alphabetical order
 #
-# EXCLUDE src/iambic.c \
 ##############################################################################
 
 SOURCES= \
@@ -406,6 +405,7 @@ src/filter.c \
 src/filter_menu.c \
 src/gpio.c \
 src/i2c.c \
+src/iambic.c \
 src/led.c \
 src/main.c \
 src/message.c \
@@ -457,7 +457,6 @@ src/zoompan.c
 #
 # The core *.h (header) files in alphabetical order
 #
-# EXCLUDE src/iambic.h \
 ##############################################################################
 
 HEADERS= \
@@ -492,6 +491,7 @@ src/fft_menu.h \
 src/filter.h \
 src/filter_menu.h \
 src/gpio.h \
+src/iambic.h \
 src/i2c.h \
 src/led.h \
 src/main.h \
@@ -544,7 +544,6 @@ src/zoompan.h
 #
 # The core *.o (object) files in alphabetical order
 #
-# EXLUDE src/iambic.o \
 ##############################################################################
 
 OBJS= \
@@ -574,6 +573,7 @@ src/fft_menu.o \
 src/filter.o \
 src/filter_menu.o \
 src/gpio.o \
+src/iambic.o \
 src/i2c.o \
 src/led.o \
 src/main.o \

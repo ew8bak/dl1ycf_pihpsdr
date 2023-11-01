@@ -544,6 +544,13 @@ void new_protocol_init(int pixels) {
     //            we set them to: RCVBUF: 0x40000, SNDBUF: 0x10000
     // then getsockopt() returns: RCVBUF: 0x40000, SNDBUF: 0x10000
     //
+  #ifdef _WIN32
+    int sndbufsize;
+    sndbufsize = 0xfa000;
+    setsockopt(data_socket, SOL_SOCKET, SO_SNDBUF, (const char *)&sndbufsize, sizeof(int));
+    sndbufsize = 0x10000;
+    setsockopt(data_socket, SOL_SOCKET, SO_RCVBUF, (const char *)&sndbufsize, sizeof(int));
+  #else
     optval = 0x40000;
 
     if (setsockopt(data_socket, SOL_SOCKET, SO_RCVBUF, &optval, optlen) < 0) {
@@ -573,6 +580,8 @@ void new_protocol_init(int pixels) {
     }
 
     optlen = sizeof(optval);
+#endif
+    
 
 #ifdef IPTOS_DSCP_EF
     optval = IPTOS_DSCP_EF;
@@ -1474,9 +1483,17 @@ static void new_protocol_receive_specific() {
 
 static void new_protocol_start() {
   new_protocol_general();
-  usleep(50000);                    // let FPGA digest the port numbers
-  new_protocol_high_priority();
-  usleep(50000);                    // let FPGA digest the "run" command
+#ifdef _WIN32
+  _sleep(50);
+#else
+  usleep(50000); //  // let FPGA digest the port numbers
+#endif            
+  new_protocol_high_priority();                 
+#ifdef _WIN32
+  _sleep(50);
+#else
+  usleep(50000); // let FPGA digest the "run" command
+#endif
   new_protocol_transmit_specific();
   new_protocol_receive_specific();
   new_protocol_timer_thread_id = g_thread_new( "P2 task", new_protocol_timer_thread, NULL);
@@ -1495,7 +1512,12 @@ void new_protocol_menu_stop() {
   // threads block on the semaphore. Then, post the semaphores
   // such that the threads can check "running" and terminate
   //
-  usleep(50000);
+#ifdef _WIN32
+  _sleep(50);
+#else
+  usleep(50000); // 50 ms
+#endif
+
 #ifdef __APPLE__
   sem_post(txiq_sem);
   sem_post(rxaudio_sem);
@@ -1520,7 +1542,11 @@ void new_protocol_menu_stop() {
   g_thread_join(new_protocol_timer_thread_id);
   new_protocol_high_priority();
   // let the FPGA rest a while
+#ifdef _WIN32
+  _sleep(200);
+#else
   usleep(200000); // 200 ms
+#endif
 
   if (!have_saturn_xdma) {
     //
@@ -1642,8 +1668,11 @@ static gpointer new_protocol_rxaudio_thread(gpointer data) {
       if (rc != sizeof(audiobuffer)) {
         t_print("sendto socket failed for %ld bytes of audio: %d\n", (long)sizeof(audiobuffer), rc);
       }
-
-      usleep(1000);
+#ifdef _WIN32
+    _sleep(1);
+#else
+    usleep(1000);
+#endif  
     }
   }
 
@@ -1694,7 +1723,11 @@ static gpointer new_protocol_txiq_thread(gpointer data) {
         exit(1);
       }
 
-      usleep(1000);
+#ifdef _WIN32
+    _sleep(1);
+#else
+    usleep(1000);
+#endif  
     }
   }
 
@@ -2279,7 +2312,11 @@ void new_protocol_cw_audio_samples(short left_audio_sample, short right_audio_sa
       // minimum latency for the CW side tone.
       //
       rxaudio_drain = 1;
+#ifdef _WIN32
+      _sleep(10);
+#else
       usleep(10000);
+#endif 
       rxaudio_drain = 0;
       rxaudio_flag = 1;
     }
@@ -2338,7 +2375,11 @@ void new_protocol_audio_samples(RECEIVER *rx, short left_audio_sample, short rig
     // This should drain the audio ring buffer.
     //
     rxaudio_drain = 1;
-    usleep(10000);
+#ifdef _WIN32
+    _sleep(10);
+#else
+     usleep(10000);
+#endif 
     rxaudio_drain = 0;
     rxaudio_flag = 0;
   }
@@ -2429,7 +2470,11 @@ void* new_protocol_timer_thread(void* arg) {
   // schedule_XXXXX() whenever a state variable has changed
   //
   int cycling = 0;
-  usleep(100000);                               // wait for things to settle down
+#ifdef _WIN32
+  _sleep(100);
+#else
+  usleep(100000);   // wait for things to settle down
+#endif                         
 
   while (running) {
     cycling++;
@@ -2458,7 +2503,11 @@ void* new_protocol_timer_thread(void* arg) {
       break;
     }
 
+#ifdef _WIN32
+    _sleep(100);
+#else
     usleep(100000);
+#endif
   }
 
   return NULL;

@@ -23,12 +23,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
+#else
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <net/if_arp.h>
 #include <net/if.h>
 #include <ifaddrs.h>
+#endif
 #include <wdsp.h>
 
 #include "appearance.h"

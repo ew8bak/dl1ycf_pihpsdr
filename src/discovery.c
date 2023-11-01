@@ -222,6 +222,52 @@ static gboolean connect_cb (GtkWidget *widget, GdkEventButton *event, gpointer d
 }
 #endif
 
+#ifdef _WIN32
+#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
+#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
+MIB_IPADDRTABLE *getIfAddressWin()
+{
+    int i;
+    PMIB_IPADDRTABLE pIPAddrTable;
+    DWORD dwSize = 0;
+    DWORD dwRetVal = 0;
+    IN_ADDR IPAddr;
+    LPVOID lpMsgBuf;
+    pIPAddrTable = (MIB_IPADDRTABLE *)MALLOC(sizeof(MIB_IPADDRTABLE));
+    if (pIPAddrTable)
+    {
+        if (GetIpAddrTable(pIPAddrTable, &dwSize, 0) ==
+            ERROR_INSUFFICIENT_BUFFER)
+        {
+            FREE(pIPAddrTable);
+            pIPAddrTable = (MIB_IPADDRTABLE *)MALLOC(dwSize);
+        }
+        if (pIPAddrTable == NULL)
+        {
+            g_print("Memory allocation failed for GetIpAddrTable\n");
+            exit(1);
+        }
+    }
+    if ((dwRetVal = GetIpAddrTable(pIPAddrTable, &dwSize, 0)) != NO_ERROR)
+    {
+        printf("GetIpAddrTable failed with error %d\n", dwRetVal);
+        if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwRetVal, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                          (LPTSTR)&lpMsgBuf, 0, NULL))
+        {
+            g_print("\tError: %s", lpMsgBuf);
+            LocalFree(lpMsgBuf);
+        }
+        exit(1);
+    }
+    return pIPAddrTable;
+    //   if (pIPAddrTable)
+    //   {
+    //       FREE(pIPAddrTable);
+    //       pIPAddrTable = NULL;
+    //   }
+}
+#endif
+
 void discovery() {
   //
   // On the discovery screen, make the combo-boxes "touchscreen-friendly"

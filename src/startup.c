@@ -53,7 +53,9 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifndef _WIN32
 #include <pwd.h>
+#endif
 
 #ifdef __APPLE__
  #include <IOKit/IOKitLib.h>
@@ -103,7 +105,19 @@ void startup(const char *path) {
   //
   // Look for files hpsdr.png, protocols.props, and pihpsdr.sh
   //
+#ifdef _WIN32
+  rc = stat("hpsdr.png", &statbuf);
 
+  if (rc == 0 && (S_ISREG(statbuf.st_mode) )) { found = 1; }
+
+  rc = stat("protocols.props", &statbuf);
+
+  if (rc == 0 && (S_ISREG(statbuf.st_mode) )) { found = 1;}
+
+  rc = stat("pihpsdr.sh", &statbuf);
+
+  if (rc == 0 && (S_ISREG(statbuf.st_mode) )) { found = 1;}
+#else
   rc = stat("hpsdr.png", &statbuf);
 
   if (rc == 0 && (S_ISREG(statbuf.st_mode) || S_ISLNK(statbuf.st_mode))) { found = 1; }
@@ -115,7 +129,7 @@ void startup(const char *path) {
   rc = stat("pihpsdr.sh", &statbuf);
 
   if (rc == 0 && (S_ISREG(statbuf.st_mode) || S_ISLNK(statbuf.st_mode))) { found = 1;}
-
+#endif
   //
   // Most likely, piHPDSR is expected to run in the current working directory
   //
@@ -129,12 +143,16 @@ void startup(const char *path) {
   // Get home dir
   //
   homedir = getenv("HOME");
+  #ifdef _WIN32
+  
+  #else
   if (homedir == NULL) {
     pwd = getpwuid(getuid());
     if (pwd != NULL) {
       homedir = pwd->pw_dir;
     }
   }
+  #endif
   if (homedir == NULL) {
     // non-recoverable error
     t_print("%s: home dir not found, working directory not changed.\n", __FUNCTION__);
@@ -153,11 +171,19 @@ void startup(const char *path) {
 #else
   snprintf(workdir, PATH_MAX, "%s/.config", homedir);
   if (stat(workdir, &statbuf) < 0) {
+#ifdef _WIN32
+    _mkdir (workdir, 0700);
+#else
     mkdir (workdir, 0700);
+#endif
   }
   snprintf(workdir, PATH_MAX, "%s/.config/pihpsdr", homedir);
   if (stat(workdir, &statbuf) < 0) {
+#ifdef _WIN32
+    _mkdir (workdir, 0700);
+#else
     mkdir (workdir, 0700);
+#endif
   }
 #endif
 

@@ -239,7 +239,11 @@ static void new_discover(struct ifaddrs *iface, int discflag)
     to_addr.sin_family = AF_INET;
     to_addr.sin_port = htons(DISCOVERY_PORT);
 
+#ifdef _WIN32
+    if (inet_pton(AF_INET, ipaddr_radio, &to_addr.sin_addr) == 0) {
+#else
     if (inet_aton(ipaddr_radio, &to_addr.sin_addr) == 0) {
+#endif
       return;
     }
 

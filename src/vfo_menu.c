@@ -294,11 +294,14 @@ void num_pad(int action, int id) {
 
     // if there is already a decimal point in the string,
     // do not add another one
+#ifdef _WIN32
+#else
     if (index(buffer, *(locale->decimal_point)) == NULL &&
         len <= sizeof(vfo[id].entered_frequency) - 2) {
       buffer[len++] = *(locale->decimal_point);
       buffer[len] = 0;
     }
+#endif
 
     break;
 
