@@ -544,13 +544,7 @@ void new_protocol_init(int pixels) {
     //            we set them to: RCVBUF: 0x40000, SNDBUF: 0x10000
     // then getsockopt() returns: RCVBUF: 0x40000, SNDBUF: 0x10000
     //
-  #ifdef _WIN32
-    int sndbufsize;
-    sndbufsize = 0xfa000;
-    setsockopt(data_socket, SOL_SOCKET, SO_SNDBUF, (const char *)&sndbufsize, sizeof(int));
-    sndbufsize = 0x10000;
-    setsockopt(data_socket, SOL_SOCKET, SO_RCVBUF, (const char *)&sndbufsize, sizeof(int));
-  #else
+  
     optval = 0x40000;
 
     if (setsockopt(data_socket, SOL_SOCKET, SO_RCVBUF, &optval, optlen) < 0) {
@@ -580,7 +574,6 @@ void new_protocol_init(int pixels) {
     }
 
     optlen = sizeof(optval);
-#endif
     
 
 #ifdef IPTOS_DSCP_EF
