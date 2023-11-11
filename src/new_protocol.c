@@ -699,11 +699,11 @@ static void new_protocol_general() {
 static void new_protocol_high_priority() {
   int i;
   BAND *band;
-  long long rx1Frequency;
-  long long rx2Frequency;
+  long long rxFrequency[2];
   long long txFrequency;
   long long HPFfreq;  // frequency determining the HPF filters
   long long LPFfreq;  // frequency determining the LPF filters
+  long long BPFfreq;  // frequency determining the BPF filters
   unsigned long phase;
 
   if (data_socket == -1 && !have_saturn_xdma) {
@@ -712,10 +712,12 @@ static void new_protocol_high_priority() {
 
   pthread_mutex_lock(&hi_prio_mutex);
   memset(high_priority_buffer_to_radio, 0, sizeof(high_priority_buffer_to_radio));
-  int xmit    = isTransmitting();
-  int txvfo   = get_tx_vfo();
-  int rxvfo   = active_receiver->id;
-  int txmode  = get_tx_mode();
+  int xmit     = isTransmitting();
+  int txvfo    = get_tx_vfo();        // VFO governing the TX frequency
+  int rxvfo    = active_receiver->id; // id of the active receiver
+  int othervfo = 1 - rxvfo;           // id of the "other" receiver (only valid if receivers > 1)
+  int txmode   = get_tx_mode();
+
   high_priority_buffer_to_radio[0] = high_priority_sequence >> 24;
   high_priority_buffer_to_radio[1] = high_priority_sequence >> 16;
   high_priority_buffer_to_radio[2] = high_priority_sequence >> 8;
@@ -741,34 +743,23 @@ static void new_protocol_high_priority() {
   }
 
   //
-  //  Set DDC frequencies
-  //  If there is only one DDC, rx2Frequency is un-used
+  //  Set DDC frequencies for RX1 and RX0
   //
-  rx1Frequency = vfo[VFO_A].frequency - vfo[VFO_A].lo;
-  rx2Frequency = vfo[VFO_B].frequency - vfo[VFO_B].lo;
+  for (int id = 0; id < 2; id++) {
+    rxFrequency[id] = vfo[id].frequency - vfo[id].lo;
 
-  if (vfo[VFO_A].rit_enabled) {
-    rx1Frequency += vfo[VFO_A].rit;
+    if (vfo[id].rit_enabled) {
+      rxFrequency[id] += vfo[id].rit;
+    }
+
+    if (vfo[id].mode == modeCWU) {
+      rxFrequency[id] -= (long long)cw_keyer_sidetone_frequency;
+    } else if (vfo[id].mode == modeCWL) {
+      rxFrequency[id] += (long long)cw_keyer_sidetone_frequency;
+    }
+
+    rxFrequency[id] += frequency_calibration;
   }
-
-  if (vfo[VFO_B].rit_enabled) {
-    rx2Frequency += vfo[VFO_B].rit;
-  }
-
-  if (vfo[VFO_A].mode == modeCWU) {
-    rx1Frequency -= (long long)cw_keyer_sidetone_frequency;
-  } else if (vfo[VFO_A].mode == modeCWL) {
-    rx1Frequency += (long long)cw_keyer_sidetone_frequency;
-  }
-
-  if (vfo[VFO_B].mode == modeCWU) {
-    rx2Frequency -= (long long)cw_keyer_sidetone_frequency;
-  } else if (vfo[VFO_B].mode == modeCWL) {
-    rx2Frequency += (long long)cw_keyer_sidetone_frequency;
-  }
-
-  rx1Frequency += frequency_calibration;
-  rx2Frequency += frequency_calibration;
 
   if (diversity_enabled && !xmit) {
     //
@@ -776,7 +767,7 @@ static void new_protocol_high_priority() {
     // This is overridden later if we do PureSignal TX
     // The "obscure" constant 34.952533333333333333333333333333 is 4294967296/122880000
     //
-    phase = (unsigned long)(((double)rx1Frequency) * 34.952533333333333333333333333333);
+    phase = (unsigned long)(((double)rxFrequency[0]) * 34.952533333333333333333333333333);
     high_priority_buffer_to_radio[9] = phase >> 24;
     high_priority_buffer_to_radio[10] = phase >> 16;
     high_priority_buffer_to_radio[11] = phase >> 8;
@@ -796,14 +787,14 @@ static void new_protocol_high_priority() {
     if (device == NEW_DEVICE_ANGELIA  || device == NEW_DEVICE_ORION ||
         device == NEW_DEVICE_ORION2 || device == NEW_DEVICE_SATURN) { ddc = 2; }
 
-    phase = (unsigned long)(((double)rx1Frequency) * 34.952533333333333333333333333333);
+    phase = (unsigned long)(((double)rxFrequency[0]) * 34.952533333333333333333333333333);
     high_priority_buffer_to_radio[9 + (ddc * 4)] = phase >> 24;
     high_priority_buffer_to_radio[10 + (ddc * 4)] = phase >> 16;
     high_priority_buffer_to_radio[11 + (ddc * 4)] = phase >> 8;
     high_priority_buffer_to_radio[12 + (ddc * 4)] = phase;
 
     if (receivers > 1) {
-      phase = (unsigned long)(((double)rx2Frequency) * 34.952533333333333333333333333333);
+      phase = (unsigned long)(((double)rxFrequency[1]) * 34.952533333333333333333333333333);
       high_priority_buffer_to_radio[13 + (ddc * 4)] = phase >> 24;
       high_priority_buffer_to_radio[14 + (ddc * 4)] = phase >> 16;
       high_priority_buffer_to_radio[15 + (ddc * 4)] = phase >> 8;
@@ -839,6 +830,9 @@ static void new_protocol_high_priority() {
     high_priority_buffer_to_radio[16] = phase;
   }
 
+  //
+  // DUC frequency and drive level
+  //
   high_priority_buffer_to_radio[329] = phase >> 24;
   high_priority_buffer_to_radio[330] = phase >> 16;
   high_priority_buffer_to_radio[331] = phase >> 8;
@@ -846,6 +840,9 @@ static void new_protocol_high_priority() {
   int power = transmitter->drive_level;
   high_priority_buffer_to_radio[345] = power & 0xFF;
 
+  //
+  // OpenCollector outputs
+  //
   if (xmit) {
     band = band_get_band(vfo[txvfo].band);
     high_priority_buffer_to_radio[1401] = band->OCtx << 1;
@@ -869,15 +866,25 @@ static void new_protocol_high_priority() {
   }
 
   //
-  //  ANAN-7000/8000 and G2:
-  //                  route TXout to XvtrOut out when using XVTR input
-  //                  (this is the condition also implemented in old_protocol)
-  //                  Note: the firmware does a logical AND with the T/R bit
-  //                  such that upon RX, Xvtr port is input, and on TX, Xvrt port
-  //                  is output if the XVTR_OUT bit is set.
+  // Orion2/G2 XVTR relay and audio disable
   //
-  if ((device == NEW_DEVICE_ORION2 || device == NEW_DEVICE_SATURN) && receiver[0]->alex_antenna == 5) {
-    high_priority_buffer_to_radio[1400] |= ANAN7000_XVTR_OUT;
+  if (device == NEW_DEVICE_ORION2 || device == NEW_DEVICE_SATURN) {
+    if (receiver[0]->alex_antenna == 5) {
+      //
+      //                  route TXout to XvtrOut out when using XVTR input
+      //                  (this is the condition also implemented in old_protocol)
+      //                  Note: the firmware does a logical AND with the T/R bit
+      //                  such that upon RX, Xvtr port is input, and on TX, Xvrt port
+      //                  is output if the XVTR_OUT bit is set.
+      //
+      high_priority_buffer_to_radio[1400] |= ANAN7000_XVTR_OUT;
+    }
+    if (mute_spkr_amp) {
+      //
+      // Mute the amplifier of the built-in speakers
+       //
+      high_priority_buffer_to_radio[1400] |= ANAN7000_SPKR_MUTE;
+    }
   }
 
   //
@@ -909,6 +916,9 @@ static void new_protocol_high_priority() {
     }
   }
 
+  //
+  // T/R relay and PS bit
+  //
   if (xmit) {
     //
     //    Do not switch TR relay to "TX" if PA is disabled.
@@ -927,10 +937,7 @@ static void new_protocol_high_priority() {
   }
 
   //
-  //  The following code is based upon the assumption that
-  //  the frequency of VFO_A is used with ADC0, and that the
-  //  frequency of VFO_B can safely be used to control the
-  //  filters of ADC1 (if there are any).
+  // Set RX filters
   //
 
   switch (device) {
@@ -938,59 +945,93 @@ static void new_protocol_high_priority() {
   case NEW_DEVICE_ORION2:
 
     //
-    //      new ANAN-7000/8000/G2 band-pass RX filters
+    // We have band-pass RX filters for ADC0 and ADC1. So if two
+    // receivers use the same ADC, the active one determines the
+    // bandpass frequency.
     //
-    //      To support the ANAN-8000 we
-    //      should bypass BPFs while transmitting in PureSignal,
-    //      but this causes unnecessary "relay chatter" on ANAN-7000
-    //      So if it should be done, 20 lines below it is shown how.
+
     //
-    if (rx1Frequency < 1500000LL) {
+    // ADC0 band pass
+    //
+
+    BPFfreq = 0LL;
+
+    if (receivers > 1) {
+      if (receiver[othervfo]->adc == 0) {
+        BPFfreq = rxFrequency[othervfo];   // Take frequency of non-active receiver
+      }
+    }
+    if (receiver[rxvfo]->adc == 0) {
+      BPFfreq = rxFrequency[rxvfo];       // Take (overwrite with) frequency of active receiver
+    }
+
+    if (diversity_enabled) {
+      BPFfreq = rxFrequency[0];
+    }
+
+    if (adc0_filter_bypass) {
+      BPFfreq = 0LL;
+    }
+
+    if (BPFfreq < 1500000LL) {
       alex0 |= ALEX_ANAN7000_RX_BYPASS_BPF;
-    } else if (rx1Frequency < 2100000LL) {
+    } else if (BPFfreq < 2100000LL) {
       alex0 |= ALEX_ANAN7000_RX_160_BPF;
-    } else if (rx1Frequency < 5500000LL) {
+    } else if (BPFfreq < 5500000LL) {
       alex0 |= ALEX_ANAN7000_RX_80_60_BPF;
-    } else if (rx1Frequency < 11000000LL) {
+    } else if (BPFfreq < 11000000LL) {
       alex0 |= ALEX_ANAN7000_RX_40_30_BPF;
-    } else if (rx1Frequency < 22000000LL) {
+    } else if (BPFfreq < 22000000LL) {
       alex0 |= ALEX_ANAN7000_RX_20_15_BPF;
-    } else if (rx1Frequency < 35000000LL) {
+    } else if (BPFfreq < 35000000LL) {
       alex0 |= ALEX_ANAN7000_RX_12_10_BPF;
     } else {
       alex0 |= ALEX_ANAN7000_RX_6_PRE_BPF;
     }
 
     //
-    // Note that while using DIVERSITY, the second RX filter settings must match
-    // those of the first RX
+    // ADC1 band pass
     //
-    if (diversity_enabled) {
-      rx2Frequency = rx1Frequency;
+
+    BPFfreq = 0LL;
+
+    if (receivers > 1) {
+      if (receiver[othervfo]->adc == 1) {
+        BPFfreq = rxFrequency[othervfo];   // Take frequency of non-active receiver
+      }
+    }
+    if (receiver[rxvfo]->adc == 1) {
+      BPFfreq = rxFrequency[rxvfo];       // Take (overwrite with) frequency of active receiver
     }
 
-    //
-    //      new ANAN-7000/8000/G2 "Alex1" band-pass RX filters
-    //
-    if (rx2Frequency < 1500000LL) {
+    if (diversity_enabled) {
+      BPFfreq = rxFrequency[0];
+    }
+
+    if (adc1_filter_bypass) {
+      BPFfreq = 0LL;
+    }
+
+    if (BPFfreq < 1500000LL) {
       alex1 |= ALEX_ANAN7000_RX_BYPASS_BPF;
-    } else if (rx2Frequency < 2100000LL) {
+    } else if (BPFfreq < 2100000LL) {
       alex1 |= ALEX_ANAN7000_RX_160_BPF;
-    } else if (rx2Frequency < 5500000LL) {
+    } else if (BPFfreq < 5500000LL) {
       alex1 |= ALEX_ANAN7000_RX_80_60_BPF;
-    } else if (rx2Frequency < 11000000LL) {
+    } else if (BPFfreq < 11000000LL) {
       alex1 |= ALEX_ANAN7000_RX_40_30_BPF;
-    } else if (rx2Frequency < 22000000LL) {
+    } else if (BPFfreq < 22000000LL) {
       alex1 |= ALEX_ANAN7000_RX_20_15_BPF;
-    } else if (rx2Frequency < 35000000LL) {
+    } else if (BPFfreq < 35000000LL) {
       alex1 |= ALEX_ANAN7000_RX_12_10_BPF;
     } else {
       alex1 |= ALEX_ANAN7000_RX_6_PRE_BPF;
     }
 
     //
-    //      The main purpose of RX2 is DIVERSITY. Therefore,
-    //      ground RX2 upon TX *always*
+    // The main purpose of RX2 is DIVERSITY. Therefore,
+    // ground RX2 upon TX *always*. This needs to be
+    // re-considered if RX2 should be used for PS feedback.
     //
     if (xmit) {
       alex1 |= ALEX1_ANAN7000_RX_GNDonTX;
@@ -1001,25 +1042,29 @@ static void new_protocol_high_priority() {
   default:
     //
     //      Old (ANAN-100/200) high-pass filters
-    //      If the second RX is active, and its ADC is ADC0, then
-    //      RX HPF filter settings depend on MIN(rx1freq,rx2freq)
+    //      If both RX are active and use ADC0,
+    //      HPF filter settings depend on MIN(rx1freq,rx2freq)
     //
-    HPFfreq = rx1Frequency;
+    HPFfreq = 0LL;
+
+    if (receiver[0]->adc == 0) {
+      HPFfreq = rxFrequency[0];
+    }
 
     if (receivers > 1) {
-      if (receiver[1]->adc == 0 && rx2Frequency < rx1Frequency) {
-        HPFfreq = rx2Frequency;
+      if (receiver[1]->adc == 0 && rxFrequency[1] < rxFrequency[0]) {
+        HPFfreq = rxFrequency[1];
       }
     }
 
-    i = 0; // flag used here for "filter bypass"
-
-    if (HPFfreq < 1800000L) { i = 1; }
-
     // Bypass HPFs if using EXT1 for PureSignal feedback!
-    if (xmit && transmitter->puresignal && receiver[PS_RX_FEEDBACK]->alex_antenna == 6) { i = 1; }
+    if (xmit && transmitter->puresignal && receiver[PS_RX_FEEDBACK]->alex_antenna == 6) { HPFfreq = 0LL; }
 
-    if (i) {
+    if (adc0_filter_bypass) {
+      HPFfreq = 0LL;
+    }
+
+    if (HPFfreq < 1800000LL) {
       alex0 |= ALEX_BYPASS_HPF;
     } else if (HPFfreq < 6500000LL) {
       alex0 |= ALEX_1_5MHZ_HPF;
@@ -1048,12 +1093,18 @@ static void new_protocol_high_priority() {
   LPFfreq = txFrequency;
 
   if (!xmit && (device != NEW_DEVICE_ORION2 && device != NEW_DEVICE_SATURN) && receiver[0]->alex_antenna < 3) {
-    LPFfreq = rx1Frequency;
+    LPFfreq = 40000000LL;  // disable the LPF
 
+    if (receiver[0]->adc == 0) {
+      LPFfreq = rxFrequency[0];
+    }
     if (receivers > 1) {
-      if (receiver[1]->adc == 0 && rx2Frequency > rx1Frequency) {
-        LPFfreq = rx2Frequency;
+      if (receiver[1]->adc == 0 && rxFrequency[1] > rxFrequency[0]) {
+        LPFfreq = rxFrequency[1];
       }
+    }
+    if (adc0_filter_bypass) {
+      LPFfreq = 40000000LL;   // disable LPF
     }
   }
 
@@ -2197,6 +2248,17 @@ static void process_high_priority() {
   int previous_ptt;
   int previous_dot;
   int previous_dash;
+  unsigned int val;
+  //
+  // variable used to manage analog inputs. The accumulators
+  // record the value*16
+  // 
+  static unsigned int fwd_acc = 0;
+  static unsigned int rev_acc = 0;
+  static unsigned int ex_acc = 0;
+  static unsigned int adc0_acc = 0;
+  static unsigned int adc1_acc = 0;
+  
   const unsigned char *buffer = high_priority_buffer->buffer;
   sequence = ((buffer[0] & 0xFF) << 24) + ((buffer[1] & 0xFF) << 16) + ((buffer[2] & 0xFF) << 8) + (buffer[3] & 0xFF);
 
@@ -2213,24 +2275,40 @@ static void process_high_priority() {
   local_ptt = buffer[4] & 0x01;
   dot = (buffer[4] >> 1) & 0x01;
   dash = (buffer[4] >> 2) & 0x01;
-  pll_locked = (buffer[4] >> 4) & 0x01;
-  adc_overload = buffer[5] & 0x01;
-  exciter_power = ((buffer[6] & 0xFF) << 8) | (buffer[7] & 0xFF);
-  alex_forward_power = ((buffer[14] & 0xFF) << 8) | (buffer[15] & 0xFF);
-  alex_reverse_power = ((buffer[22] & 0xFF) << 8) | (buffer[23] & 0xFF);
-  //
-  //  calculate moving averages of fwd and rev voltages to have a correct SWR
-  //  at the edges of an RF pulse. Otherwise a false trigger of the SWR
-  //  protection may occur. Note that during TX, a HighPrio package from the radio
-  //  is sent every milli-second.
-  //  This exponential average means that the power drops to 1 percent within 16 hits
-  //  (at most 16 msec).
-  //
-  alex_forward_power_average = (alex_forward_power + 3 * alex_forward_power_average) >> 2;
-  alex_reverse_power_average = (alex_reverse_power + 3 * alex_reverse_power_average) >> 2;
-  supply_volts = ((buffer[49] & 0xFF) << 8) | (buffer[50] & 0xFF);
+  tx_fifo_overrun |= (buffer[4] & 0x40) >> 6;
+  tx_fifo_underrun |= (buffer[4] & 0x20) >> 5;
+  adc0_overload |= buffer[5] & 0x01;
+  adc1_overload |= ((buffer[5] & 0x02) >> 1);
 
+  //
+  // During RX, HighPrio packets arrive every 50 msec
+  // During TX, HighPrio packets arrive every    msec
+  //
+  // Since the analog data is used during TX only, we
+  // can make a moving average with 16 values, and
+  // take a max value with 100 values.
+  //
+
+  val = ((buffer[6] & 0xFF) << 8) | (buffer[7] & 0xFF);
+  ex_acc = (15 * ex_acc) / 16  + val;
+  val = ((buffer[14] & 0xFF) << 8) | (buffer[15] & 0xFF);
+  fwd_acc = (15 *fwd_acc) / 16 + val;
+  val = ((buffer[22] & 0xFF) << 8) | (buffer[23] & 0xFF);
+  rev_acc = (15 *rev_acc) / 16 + val;
+  val = ((buffer[55] & 0xFF) << 8) | (buffer[56] & 0xFF);
+  adc1_acc = (15 *adc1_acc) / 16 + val;
+  val = ((buffer[57] & 0xFF) << 8) | (buffer[58] & 0xFF);
+  adc0_acc = (15 *adc0_acc) / 16 + val;
+
+  exciter_power = ex_acc / 16;
+  alex_forward_power = fwd_acc / 16;
+  alex_reverse_power = rev_acc / 16;
+  ADC0 = adc0_acc / 16;
+  ADC1 = adc1_acc / 16;
+     
+  //
   // Stops CAT cw transmission if radio reports "CW action"
+  //
   if (dash || dot) {
     CAT_cw_is_active = 0;
     cw_key_hit = 1;

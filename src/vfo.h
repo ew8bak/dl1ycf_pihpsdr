@@ -49,9 +49,10 @@ struct _vfo {
   long long offset;
 
   //
-  // Mode data
+  // Mode data and step size
   //
   int mode;
+  int step;
 
   //
   // Filter data
@@ -94,13 +95,12 @@ struct _mode_settings {
 
 extern struct _mode_settings mode_settings[];
 
-#define STEPS 15
+#define STEPS 17
 extern char *step_labels[];
 
 extern GtkWidget* vfo_init(int width, int height);
-extern int  vfo_get_stepindex(void);
-extern void vfo_set_step_from_index(int index);
-extern void vfo_set_stepsize(int newstep);
+extern int  vfo_get_stepindex(int id);
+extern void vfo_set_step_from_index(int id, int index);
 extern int  vfo_get_step_from_index(int index);
 extern void vfo_step(int steps);
 extern void vfo_id_step(int id, int steps);

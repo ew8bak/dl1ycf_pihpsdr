@@ -83,8 +83,6 @@
   #include "MacOS.h"  // emulate clock_gettime on old MacOS systems
 #endif
 
-//#define PACKETLIST  // indicate incoming packets with time-stamp
-
 #define EXTERN
 #include "hpsdrsim.h"
 
@@ -606,8 +604,7 @@ int main(int argc, char *argv[]) {
       }
 
 #ifdef PACKETLIST
-      clock_gettime(CLOCK_MONOTONIC, &ts);
-      t_print("TCP:%d.%03d\n", (int) (ts.tv_sec % 1000), (int) (ts.tv_nsec / 1000000L));
+      t_print("TCP received\n");
 #endif
       bytes_read = size;
 
@@ -642,8 +639,7 @@ int main(int argc, char *argv[]) {
       if (bytes_read > 0) {
         udp_retries = 0;
 #ifdef PACKETLIST
-        clock_gettime(CLOCK_MONOTONIC, &ts);
-        t_print("UDP:%d.%03d\n", (int) (ts.tv_sec % 1000), (int) (ts.tv_nsec / 1000000L));
+        t_print("UDP received\n");
 #endif
       } else {
         udp_retries++;
@@ -1578,8 +1574,8 @@ void *handler_ep6(void *arg) {
       case 8:
         if (OLDDEVICE == ODEV_HERMES_LITE2) {
           // HL2: temperature
-          *(pointer + 4) =  3;
-          *(pointer + 5) = 112; // 3*256 + 112 = 880 ==> 20.0 degrees centigrade
+          *(pointer + 4) =  4;
+          *(pointer + 5) =  0; // value = 1024, 31.5 degrees
         } else {
           // AIN5: Exciter power
           *(pointer + 4) = 0;       // about 500 mW
@@ -1594,16 +1590,24 @@ void *handler_ep6(void *arg) {
         break;
 
       case 16:
-        // AIN2: Reverse power; stays at zero
-        // AIN3: stays at zero (PA current for HL2)
+        // AIN2: Reverse power; 5 percent of forward
+        j = (int) (0.05* (4095.0 / c1) * sqrt(maxpwr * txlevel * c2));
+        *(pointer + 4) = (j >> 8) & 0xFF;
+        *(pointer + 5) = (j     ) & 0xFF;
+        // AIN3: ADC0 (PA current for HL2, PA voltage for others)
+        *(pointer + 6) =  2;
+        *(pointer + 7) =  0; // value = 1024, 
         header_offset = 24;
         break;
 
       case 24:
         // AIN4:
-        // AIN5: supply voltage
-        *(pointer + 6) = 0;
-        *(pointer + 7) = 63;
+        *(pointer + 4) =  4;
+        *(pointer + 5) =  0; // value = 1024, 
+        
+        // AIN6: supply_voltage
+        *(pointer + 6) = 4;
+        *(pointer + 7) = 0;  // value = 1024
         header_offset = 32;
         break;
 

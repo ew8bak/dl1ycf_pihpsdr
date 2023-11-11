@@ -1074,6 +1074,19 @@ static void process_control_bytes() {
   int previous_ptt;
   int previous_dot;
   int previous_dash;
+  unsigned int val;
+
+  //
+  // variable used to manage analog inputs. The accumulators
+  // record the value*16.
+  // 
+  static unsigned int fwd_acc = 0; 
+  static unsigned int rev_acc = 0;
+  static unsigned int ex_acc = 0;
+  static unsigned int adc0_acc = 0;
+  static unsigned int adc1_acc = 0;
+
+
   // do not set ptt. In PureSignal, this would stop the
   // receiver sending samples to WDSP abruptly.
   // Do the RX-TX change only via ext_mox_update.
@@ -1102,7 +1115,7 @@ static void process_control_bytes() {
 
   switch ((control_in[0] >> 3) & 0x1F) {
   case 0:
-    adc_overload = control_in[1] & 0x01;
+    adc0_overload |= (control_in[1] & 0x01);
 
     if (device != DEVICE_HERMES_LITE2) {
       //
@@ -1110,10 +1123,6 @@ static void process_control_bytes() {
       // C1 unused except the ADC overload bit
       // C2/C3 contains underflow/overflow and TX FIFO count
       //
-      IO1 = (control_in[1] & 0x02) ? 0 : 1;
-      IO2 = (control_in[1] & 0x04) ? 0 : 1;
-      IO3 = (control_in[1] & 0x08) ? 0 : 1;
-
       if (mercury_software_version != control_in[2]) {
         mercury_software_version = control_in[2];
         t_print("  Mercury Software version: %d (0x%0X)\n", mercury_software_version, mercury_software_version);
@@ -1123,24 +1132,22 @@ static void process_control_bytes() {
         penelope_software_version = control_in[3];
         t_print("  Penelope Software version: %d (0x%0X)\n", penelope_software_version, penelope_software_version);
       }
-    }
-
-    //
-    // HermesLite-II TX-FIFO overflow/underrun detection.
-    //
-    // Measured on HL2 software version 7.2:
-    // multiply FIFO value with 32 to get sample count
-    // multiply FIFO value with 0.67 to get FIFO length in milli-seconds
-    // Overflow at about 3600 samples (75 msec).
-    //
-    // As a result, we set the "TX latency" to 40 msec (see below).
-    //
-    // Note after an RX/TX transition, "underflow" is reported
-    // until the TX fifo begins to fill, so we ignore these underflows
-    // until the first packet reporting "no underflow" after each
-    // RX/TX transition.
-    //
-    if (device == DEVICE_HERMES_LITE2) {
+    } else {
+      //
+      // HermesLite-II TX-FIFO overflow/underrun detection.
+      //
+      // Measured on HL2 software version 7.2:
+      // multiply FIFO value with 32 to get sample count
+      // multiply FIFO value with 0.67 to get FIFO length in milli-seconds
+      // Overflow at about 3600 samples (75 msec).
+      //
+      // As a result, we set the "TX latency" to 40 msec (see below).
+      //
+      // Note after an RX/TX transition, "underflow" is reported
+      // until the TX fifo begins to fill, so we ignore these underflows
+      // until the first packet reporting "no underflow" after each
+      // RX/TX transition.
+      //
       if (!isTransmitting()) {
         // during RX: set flag to zero
         tx_fifo_flag = 0;
@@ -1166,45 +1173,38 @@ static void process_control_bytes() {
     break;
 
   case 1:
-    if (device != DEVICE_HERMES_LITE2) {
-      //
-      // HL2 uses C1/C2 for measuring the temperature
-      //
-      exciter_power = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF); // from Penelope or Hermes
-    } else {
-      exciter_power = 0;
-      unsigned int temperature = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF); // HL2
-      // moving average
-      average_temperature = (temperature + 7 * average_temperature) >> 3;
-    }
+    // Note HL2 uses this for the temperature
+    val = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF); // HL2
+    ex_acc = (15 * ex_acc) / 16  + val;
+    exciter_power = ex_acc / 16;
 
-    //
-    //  calculate moving averages of fwd and rev voltages to have a correct SWR
-    //  at the edges of an RF pulse. Otherwise a false trigger of the SWR
-    //  alarm may occur.
-    //
-    alex_forward_power = ((control_in[3] & 0xFF) << 8) | (control_in[4] & 0xFF); // from Alex or Apollo
-    alex_forward_power_average = (alex_forward_power + 3 * alex_forward_power_average) >> 2;
+    val = ((control_in[3] & 0xFF) << 8) | (control_in[4] & 0xFF);
+    fwd_acc = (15 *fwd_acc) / 16 + val;
+    alex_forward_power = fwd_acc / 16;
+
     break;
 
   case 2:
-    alex_reverse_power = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF); // from Alex or Apollo
-    alex_reverse_power_average = (alex_reverse_power + 3 * alex_reverse_power_average) >> 2;
+    val = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF);
+    rev_acc = (15 *rev_acc) / 16 + val;
+    alex_reverse_power = rev_acc / 16;
 
-    if (device != DEVICE_HERMES_LITE2) {
-      AIN3 = ((control_in[3] & 0xFF) << 8) | (control_in[4] & 0xFF); // For Penelope or Hermes
-    } else {
-      unsigned int current = ((control_in[3] & 0xFF) << 8) | (control_in[4] & 0xFF); // HL2
-      // moving average
-      average_current = (3 * average_current + current) >> 2;
-    }
+    val = ((control_in[3] & 0xFF) << 8) | (control_in[4] & 0xFF);
+    adc0_acc = (15 *adc0_acc) / 16 + val;
+    ADC0 = adc0_acc / 16;
 
     break;
 
   case 3:
-    AIN4 = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF); // For Penelope or Hermes
-    AIN6 = ((control_in[3] & 0xFF) << 8) | (control_in[4] & 0xFF); // For Penelope or Hermes
+    val  = ((control_in[1] & 0xFF) << 8) | (control_in[2] & 0xFF);
+    adc1_acc = (15 *adc1_acc) / 16 + val;
+    ADC1 = adc1_acc / 16;
+
     break;
+
+  case 4:
+    adc0_overload |= control_in[1] & 0x01;
+    adc1_overload |= control_in[2] & 0x01;
   }
 }
 
@@ -2005,6 +2005,11 @@ void ozy_send_buffer() {
         }
       }
 
+      if (!isTransmitting() && adc0_filter_bypass) {
+          output_buffer[C2] |= 0x40; // Manual Filter Selection
+          output_buffer[C3] |= 0x20; // bypass all RX filters
+      }
+
       //
       // If using PureSignal and a feedback to EXT1, we have to manually activate the RX HPF/BPF
       // filters and select "bypass" since the feedback signal must arrive at the board
@@ -2249,6 +2254,14 @@ void ozy_send_buffer() {
 
       if (transmitter->puresignal) {
         output_buffer[C2] |= 0x40;       // Synchronize RX5 and TX frequency on transmit (ANAN-7000)
+      }
+
+      if (adc1_filter_bypass) {
+        //
+        // This becomes only effective if manual filter selection is enabled
+        // and this is only done if the adc0 filter bypass is also selected
+        //
+        output_buffer[C1] |= 0x20; // bypass filters
       }
 
       //

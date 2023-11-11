@@ -136,6 +136,7 @@ ACTION_TABLE ActionTable[] = {
   {IF_WIDTH_RX2,        "IF Width\nRX2",        "IFWIDTH2",     MIDI_WHEEL | CONTROLLER_ENCODER},
   {LINEIN_GAIN,         "Linein\nGain",         "LIGAIN",       MIDI_KNOB  | MIDI_WHEEL | CONTROLLER_ENCODER},
   {LOCK,                "Lock",                 "LOCKM",        MIDI_KEY   | CONTROLLER_SWITCH},
+  {MENU_MAIN,           "Main\nMenu",           "MAIN",         MIDI_KEY   | CONTROLLER_SWITCH},
   {MENU_MEMORY,         "Memory\nMenu",         "MEM",          MIDI_KEY   | CONTROLLER_SWITCH},
   {MIC_GAIN,            "Mic Gain",             "MICGAIN",      MIDI_KNOB  | MIDI_WHEEL | CONTROLLER_ENCODER},
   {MODE_MINUS,          "Mode -",               "MD-",          MIDI_KEY   | CONTROLLER_SWITCH},
@@ -304,10 +305,12 @@ void schedule_action(enum ACTION action, enum ACTION_MODE mode, gint val) {
     // which take care of PTT themselves.
     //
     if (mode == PRESSED && (cw_keyer_internal == 0 || CAT_cw_is_active)) {
+      gpio_set_cw(1);
       cw_key_down = 960000; // max. 20 sec to protect hardware
       cw_key_up = 0;
       cw_key_hit = 1;
     } else {
+      gpio_set_cw(0);
       cw_key_down = 0;
       cw_key_up = 0;
     }
@@ -888,6 +891,13 @@ int process_action(void *data) {
 
     break;
 
+  case MENU_MAIN:
+    if (a->mode == PRESSED) {
+      new_menu();
+    }
+
+    break;
+
   case MENU_MEMORY:
     if (a->mode == PRESSED) {
       start_store();
@@ -1405,8 +1415,8 @@ int process_action(void *data) {
 
   case VFO_STEP_MINUS:
     if (a->mode == PRESSED) {
-      i = vfo_get_stepindex();
-      vfo_set_step_from_index(--i);
+      i = vfo_get_stepindex(active_receiver->id);
+      vfo_set_step_from_index(active_receiver->id, --i);
       g_idle_add(ext_vfo_update, NULL);
     }
 
@@ -1414,8 +1424,8 @@ int process_action(void *data) {
 
   case VFO_STEP_PLUS:
     if (a->mode == PRESSED) {
-      i = vfo_get_stepindex();
-      vfo_set_step_from_index(++i);
+      i = vfo_get_stepindex(active_receiver->id);
+      vfo_set_step_from_index(active_receiver->id, ++i);
       g_idle_add(ext_vfo_update, NULL);
     }
 

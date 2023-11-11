@@ -163,7 +163,6 @@ extern DAC dac[2];
 
 extern int locked;
 
-extern long long step;
 extern int rit_increment;
 
 extern gboolean duplex;
@@ -195,24 +194,19 @@ extern int mox;
 extern int tune;
 extern int memory_tune;
 extern int full_tune;
-extern int adc_overload;
-extern int pll_locked;
+
+extern int adc0_overload;
+extern int adc1_overload;
+extern int tx_fifo_underrun;
+extern int tx_fifo_overrun;
+extern int high_swr_seen;
+extern int sequence_errors;
+
 extern unsigned int exciter_power;
-extern unsigned int average_temperature;
-extern unsigned int average_current;
-extern unsigned int tx_fifo_underrun;
-extern unsigned int tx_fifo_overrun;
 extern unsigned int alex_forward_power;
 extern unsigned int alex_reverse_power;
-extern unsigned int alex_forward_power_average;
-extern unsigned int alex_reverse_power_average;
-extern unsigned int IO1;
-extern unsigned int IO2;
-extern unsigned int IO3;
-extern unsigned int AIN3;
-extern unsigned int AIN4;
-extern unsigned int AIN6;
-extern int supply_volts;
+extern unsigned int ADC1;
+extern unsigned int ADC0;
 
 extern int split;
 
@@ -266,13 +260,17 @@ extern int rx_gain_calibration;  // used to calibrate the input signal
 extern double drive_max;         // maximum value of the drive slider
 extern double drive_digi_max;    // maximum value allowed in DIGU/DIGL
 
-extern gboolean display_sequence_errors;
-extern gboolean display_swr_protection;
-extern gint sequence_errors;
+extern gboolean display_warnings;
+extern gboolean display_pacurr;
+
 extern GMutex property_mutex;
 
 extern int hl2_audio_codec;
 extern int anan10E;
+
+extern int adc0_filter_bypass;   // Bypass ADC0 filters on receive
+extern int adc1_filter_bypass;   // Bypass ADC1 filters on receiver  (ANAN-7000/8000/G2)
+extern int mute_spkr_amp;        // Mute audio amplifier in radio    (ANAN-7000, G2)
 
 extern int VFO_WIDTH;
 extern int VFO_HEIGHT;

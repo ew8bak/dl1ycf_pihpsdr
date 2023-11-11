@@ -275,6 +275,7 @@ static double compute_power(double p) {
 static gboolean update_display(gpointer data) {
   TRANSMITTER *tx = (TRANSMITTER *)data;
   int rc;
+  static int pre_high_swr = 0;
 
   //t_print("update_display: tx id=%d\n",tx->id);
   if (tx->displaying) {
@@ -352,13 +353,11 @@ static gboolean update_display(gpointer data) {
     tx->alc = GetTXAMeter(tx->id, alc);
     double constant1;
     double constant2;
+    double rconstant2;  // allow different C2 values for calculating fwd and ref power
     int fwd_cal_offset;
     int rev_cal_offset;
     int fwd_power;
     int rev_power;
-    int fwd_average;  // only used for SWR calculation, VOLTAGE value
-    int rev_average;  // only used for SWR calculation, VOLTAGE value
-    int ex_power;
     double v1;
     rc = get_tx_vfo();
     int is6m = (vfo[rc].band == band6);
@@ -373,11 +372,9 @@ static gboolean update_display(gpointer data) {
       // This includes SOAPY (where these numbers are not used)
       constant1 = 3.3;
       constant2 = 0.09;
+      rconstant2 = 0.09;
       rev_cal_offset = 3;
       fwd_cal_offset = 6;
-
-      if (is6m) { constant2 = 0.5; }
-
       break;
 
     case DEVICE_HERMES:
@@ -386,22 +383,18 @@ static gboolean update_display(gpointer data) {
     case NEW_DEVICE_ANGELIA:
       constant1 = 3.3;
       constant2 = 0.095;
+      rconstant2 = is6m ? 0.5 : 0.095;
       rev_cal_offset = 3;
       fwd_cal_offset = 6;
-
-      if (is6m) { constant2 = 0.5; }
-
       break;
 
     case DEVICE_ORION:  // Anan200D
     case NEW_DEVICE_ORION:
       constant1 = 5.0;
       constant2 = 0.108;
+      rconstant2 = is6m ? 0.5 : 0.108;
       rev_cal_offset = 2;
       fwd_cal_offset = 4;
-
-      if (is6m) { constant2 = 0.5; }
-
       break;
 
     case DEVICE_ORION2:  // Anan7000/8000/G2
@@ -409,18 +402,18 @@ static gboolean update_display(gpointer data) {
     case NEW_DEVICE_SATURN:
       if (pa_power == PA_100W) {
         // ANAN-7000  values.
-        // Thetis uses a highly improbable value for the
-        // reverse power on the 6m band.
         constant1 = 5.0;
-        constant2 = 0.12;          // Thetis: fwd=0.12 rev=0.15
+        constant2 = 0.12;
+        rconstant2 = is6m ? 0.7 : 0.15;
         rev_cal_offset = 28;
         fwd_cal_offset = 32;
       } else {
         // Anan-8000 values
         constant1 = 5.0;
-        constant2 = 0.08;          // Anan7000: 0.12 ... 0.15
-        rev_cal_offset = 16;       // Anan7000: 28
-        fwd_cal_offset = 28;       // Anan7000: 32
+        constant2 = 0.08;
+        rconstant2 = 0.08;
+        rev_cal_offset = 16;
+        fwd_cal_offset = 18;
       }
 
       break;
@@ -430,7 +423,8 @@ static gboolean update_display(gpointer data) {
     case NEW_DEVICE_HERMES_LITE:
     case NEW_DEVICE_HERMES_LITE2:
       constant1 = 3.3;
-      constant2 = 1.5;    // Thetis: 1.8 for ref, 1.4 for fwd
+      constant2 = 1.5;
+      rconstant2 = 1.8;
       rev_cal_offset = 3;
       fwd_cal_offset = 6;
       break;
@@ -439,86 +433,50 @@ static gboolean update_display(gpointer data) {
     switch (protocol) {
     case ORIGINAL_PROTOCOL:
     case NEW_PROTOCOL:
-      fwd_power = alex_forward_power;
-      rev_power = alex_reverse_power;
-      fwd_average = alex_forward_power_average;
-      rev_average = alex_reverse_power_average;
-      ex_power = exciter_power;
+      fwd_power   = alex_forward_power;
+      rev_power   = alex_reverse_power;
 
+      //
+      // Special hook for HL2s with an incorrectly wound current
+      // sense transformer: Exchange fwd and rev readings
+      //
       if (device == DEVICE_HERMES_LITE || device == DEVICE_HERMES_LITE2 ||
           device == NEW_DEVICE_HERMES_LITE || device == NEW_DEVICE_HERMES_LITE2) {
-        // possible reversed depending polarity of current sense transformer
         if (rev_power > fwd_power) {
-          fwd_power = alex_reverse_power;
-          rev_power = alex_forward_power;
-          fwd_average = alex_reverse_power_average;
-          rev_average = alex_forward_power_average;
+          fwd_power   = alex_reverse_power;
+          rev_power   = alex_forward_power;
         }
 
-        ex_power = 0;
-        tx->exciter = 0.0;
-      } else {
-        ex_power = ex_power - fwd_cal_offset;
-
-        if (ex_power < 0) { ex_power = 0; }
-
-        v1 = ((double)ex_power / 4095.0) * constant1;
-        tx->exciter = (v1 * v1) / constant2;
-      }
-
-      if (fwd_power == 0) {
-        fwd_power = ex_power;
       }
 
       fwd_power = fwd_power - fwd_cal_offset;
+      rev_power = rev_power - rev_cal_offset;
 
       if (fwd_power < 0) { fwd_power = 0; }
+      if (rev_power < 0) { rev_power = 0; }
 
       v1 = ((double)fwd_power / 4095.0) * constant1;
       tx->fwd = (v1 * v1) / constant2;
-      tx->rev = 0.0;
 
-      if (fwd_power != 0 ) {
-        rev_power = rev_power - rev_cal_offset;
-
-        if (rev_power < 0) { rev_power = 0; }
-
-        v1 = ((double)rev_power / 4095.0) * constant1;
-        tx->rev = (v1 * v1) / constant2;
-      }
-
-      //
-      // we apply the offset but no further calculation
-      // since only the ratio of rev_average and fwd_average is needed
-      //
-      fwd_average = fwd_average - fwd_cal_offset;
-      rev_average = rev_average - rev_cal_offset;
-
-      if (rev_average < 0) { rev_average = 0; }
-
-      if (fwd_average < 0) { fwd_average = 0; }
+      v1 = ((double)rev_power / 4095.0) * constant1;
+      tx->rev = (v1 * v1) / rconstant2;
 
       break;
 
     case SOAPYSDR_PROTOCOL:
     default:
-      tx->fwd = 0.0;
-      tx->exciter = 0.0;
       tx->rev = 0.0;
-      fwd_average = 0;
-      rev_average = 0;
+      tx->fwd = 0.0;
       break;
     }
 
-    //t_print("transmitter: meter_update: fwd:%f->%f rev:%f->%f ex_fwd=%d alex_fwd=%d alex_rev=%d\n",tx->fwd,compute_power(tx->fwd),tx->rev,compute_power(tx->rev),exciter_power,alex_forward_power,alex_reverse_power);
     //
     // compute_power does an interpolation is user-supplied pairs of
     // data points (measured by radio, measured by external watt meter)
     // are available.
     //
+    tx->rev  = compute_power(tx->rev);
     tx->fwd = compute_power(tx->fwd);
-    tx->rev = compute_power(tx->rev);
-    tx->exciter = compute_power(tx->exciter);
 
     //
     // Calculate SWR and store as tx->swr.
@@ -526,14 +484,15 @@ static gboolean update_display(gpointer data) {
     // implement SWR protection etc.
     // The SWR is calculated from the (time-averaged) forward and reverse voltages.
     // Take care that no division by zero can happen, since otherwise the moving
-    // exponential average cannot survive from a "nan".
+    // exponential average cannot survive.
     //
-    if (tx->fwd > 0.1 && fwd_average > 0.01) {
+    if (tx->fwd > 0.25) {
       //
       // SWR means VSWR (voltage based) but we have the forward and
       // reflected power, so correct for that
       //
-      double gamma = (double) rev_average / (double) fwd_average;
+
+      double gamma = sqrt(tx->rev/tx->fwd);
 
       //
       // this prevents SWR going to infinity, from which the
@@ -541,7 +500,7 @@ static gboolean update_display(gpointer data) {
       //
       if (gamma > 0.95) { gamma = 0.95; }
 
-      tx->swr = 0.7 * (1 + gamma) / (1 - gamma) + 0.3 * tx->swr;
+      tx->swr = 0.7 * (1.0 + gamma) / (1.0 - gamma) + 0.3 * tx->swr;
     } else {
       //
       // During RX, move towards 1.0
@@ -549,19 +508,27 @@ static gboolean update_display(gpointer data) {
       tx->swr = 0.7 + 0.3 * tx->swr;
     }
 
-    if (tx->fwd <= 0.0) { tx->fwd = tx->exciter; }
-
     //
-    //  If SWR is above threshold and SWR protection is enabled,
+    //  If SWR is above threshold emit a waring.
+    //  If additionally  SWR protection is enabled,
     //  set the drive slider to zero. Do not do this while tuning
+    //  To be sure that we do not shut down upon an artifact,
+    //  it is required high SWR is seen in to subsequent calls.
     //
-    if (tx->swr_protection && !getTune() && tx->swr >= tx->swr_alarm) {
-      set_drive(0.0);
-      display_swr_protection = TRUE;
+    if (tx->swr >= tx->swr_alarm) {
+      if (pre_high_swr) {
+        if (tx->swr_protection && !getTune()) {
+          set_drive(0.0);
+        }
+        high_swr_seen = 1;
+      }
+      pre_high_swr = 1;
+    } else {
+      pre_high_swr = 0;
     }
 
     if (!duplex) {
-      meter_update(active_receiver, POWER, tx->fwd, tx->rev, tx->exciter, tx->alc, tx->swr);
+      meter_update(active_receiver, POWER, tx->fwd, tx->alc, tx->swr);
     }
 
     return TRUE; // keep going
@@ -1014,15 +981,28 @@ static void full_tx_buffer(TRANSMITTER *tx) {
   }
 
   if (cwmode) {
+
     //
     // do not update VOX in CW mode in case we have just switched to CW
     // and tx->mic_input_buffer is non-empty. WDSP (fexchange0) is not
     // needed because we directly produce the I/Q samples (see below).
-    // What we do, however, is to create the iq_output_buffer for the
-    // sole purpose to display the spectrum of our CW signal. Then,
-    // the difference between poorly-shaped and well-shaped CW pulses
-    // also becomes visible on *our* TX spectrum display.
     //
+    // Note that WDSP is not needed, but we still call it (and discard the
+    // results) since this  may help in correct slew-up and slew-down
+    // of the TX engine. The mic input buffer is zeroed out in CW mode.
+    //
+    // The main reason why we do NOT constructe an artificial microphone
+    // signal to generate the RF pulse is that we do not want MicGain
+    // and equalizer settings to interfere.
+    //
+
+    fexchange0(tx->id, tx->mic_input_buffer, tx->iq_output_buffer, &error);
+
+    //
+    // Construct our CW TX signal in tx->iq_output_buffer for the sole
+    // purpose of displaying them in the TX panadapter
+    //
+
     dp = tx->iq_output_buffer;
 
     // These are the I/Q samples that describe our CW signal
@@ -1037,6 +1017,7 @@ static void full_tx_buffer(TRANSMITTER *tx) {
       break;
 
     case NEW_PROTOCOL:
+    case SOAPYSDR_PROTOCOL:
       for (j = 0; j < tx->output_samples; j++) {
         *dp++ = 0.0;
         *dp++ = cw_shape_buffer192[j];

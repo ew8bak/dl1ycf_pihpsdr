@@ -250,7 +250,8 @@ when you first start piHPSDR.}
 of this manual.}
 \item[Controller2 V1]{This option is valid for some early prototypes of the "version 2" controller with
 single encoders. This special case is not covered in this manual.}
-\item[Controller2 V2]{Choose this if you have a "version 2" piHPSDR controller with double encocders.
+\item[Controller2 V2]{Choose this if you have a "version 2" piHPSDR controller with double encoders
+on a single shaft.
 This controller is denoted Controller2 in the rest of this manual.}
 \item[G2 Front Panel]{Choose this if you have an ANAN G2 radio with a built-in controller.}
 \end{itemize}
@@ -394,8 +395,9 @@ on the signal strength (red colour is reached for S9). The above
 picture demonstrates the four possible combinations, and in
 the \bltt{Display} menu, you can make your choice. This setting
 refers to both receivers when there are two. Note that the TX
-spectrum can be a filled one or a line spectrum, but that the
-gradient option does not apply.
+spectrum can be a filled one or a line spectrum (to be specified
+in the \bltt{TX} menu), but that there
+is nov gradient option.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Zoom and Pan}
@@ -436,6 +438,11 @@ RX scope, and marked with a thin red line. On the picture
 above, the dial frequency (14.100 MHz) is found in the RX
 panel close to the left edge, and this has been done
 by moving the \rett{Pan} slider.
+
+Note that the TX spectrum scope always has a fixed spectral
+width, namely 24 kHz in non-duplex mode when the TX spectrum
+scope is shown in the main window, and 6 kHz in duplex mode
+when the TX spectrum is shown in a small separate window.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{The \texttt{Hide} button}
@@ -909,7 +916,8 @@ program but no re-boot or shutdown takes place, due to missing administrator pri
 \caption{The \bltt{About} menu.}
 \end{figure}
 
-The about menu gives you some information about piHPSDR, first the original author
+The about menu gives you some information about piHPSDR, first the original author,
+John Melton,
 and an (incomplete) list
 of persons who contributed to the code, and then a statement which version of piHPSDR
 is working here, and when it has been compiled. Here you also find the version number of the WDSP
@@ -917,7 +925,7 @@ is working here, and when it has been compiled. Here you also find the version n
 running under the hood, and which does nearly all of the signal processing. If you file a bug report,
 this is very important information so you should always include a screen shot of the \bltt{About}
 menu when reporting problems. Of particular importance is the so-called \rett{commit},
-this hexadecimal number (here: 1eeb375) identifies the exact status of the source code files
+this hexadecimal number (here: 8339957) identifies the exact status of the source code files
 when the program has been compiled. If a string \texttt{-dirty} is appended to the version number
 (here: 2.3-DL1YCF, that is, not dirty) this means that one or more files have been locally  modified
 and do not match the commit, and problem reports from a ,,dirty'' version are difficult to handle.
@@ -1050,6 +1058,11 @@ on your choice. While this is (only a little bit) more involved than the normal 
 when using a mouse, it is a great helper when using a touch screen. Therefore this
 option is set by default, but you can uncheck it here if you prefer normal
 mouse operation. Note that this option becomes effective when the next menu is opened.
+
+\rett{Mute Spkr Amp} This box only appears on Anan-7000/8000 and G2 radios using protocol 2.
+If checked, the audio amplifier driving the speakers (either the speaker jacks in the
+back panel, or the built-in speakers) is disabled. This does not affect the audio signal
+at the headphone jack.
 
 \rett{Frequency Calibration} Here you can set a frequency offset (in Hz). This offset
 will be added to all frequencies sent to the radio. This means that if you discover that
@@ -1242,19 +1255,30 @@ determined by the width and height chosen above.
  this then serves as an indication which function is associtated with each of
  the 8 push buttone immediately below the screen.
 
-\rett{Display Seq Errs} All data packets from the radio to the PC contain
-a sequence number that is increased  for each packet sent. piHPSDR
-checks for each incoming data packet whether the sequence number is
-exactly larger by 1 than the number of the previous packet. If this is not
-the case, this is a \textit{sequence error}. Sequence errors may be caused
-by loosing packets on the way from the radio to the computer, or
-(this is what is usually the reason) packets lost within the computer due
-to the computer being busy with something else (e.g. writing to disk).
- If the \rett{Display Seq Errs} is checked, a red
-,,Sequence error'' message appears in the panel of the active receiver for two seconds.
-Sequence errors during RX often cause cracks in the RX audio. Unless this
-happens regularly, it is no reason to worry.
+\rett{Display Warnings} There are several non-fatal conditions that can
+be displayed either on the panadapter of the first receiver or, in non-duplex
+mode, on the TX panadapter. Normally these warnings are no reason to worry
+if you see them  only occasionally. These conditions are
 
+\textbf{Sequence Error}. Packets from the radio arrive in the wrong order, or packets
+are missing. If this occurs frequently, check the connection between the radio and
+the host computer.
+
+\textbf{ADC overload}. The RF input level is too high for one of the analog-to-digital
+converters. If you see this, increase attenuation in the RF front end.
+
+\textbf{TX FIFO underrun/overrun} The TX IQ data packets sent to the radio while transmitting
+either arrive too fast or too slow, such that the first-in/first-out queue of TX samples
+inside the FPGA of the radio either overflows or drains.
+
+\textbf{High SWR} During TX, an SWR above the SWR threshold has been detected. If this occurs
+frequentyl, check your antenna. The SWR threshold (default: 3.0) can be set in the
+\bltt{TX} menu.
+
+\rett{Display PA current} If this is checked, the PA supply voltage and the PA current
+are shown while transmitting. This data is only available for Orion-II and SATURN boards
+(ANAN-7000/8000 and ANAN-G2 and the HermesLite-II).
+ For the HermesLite-II, the PA temperature and the PA current are shown.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{The \texttt{Display} Menu}
 
@@ -1286,11 +1310,15 @@ the spectrum scope. Lines are drawn at dBm values that are multiples of the step
 size.
 
 \rett{Waterfall High:} This is the RX dBm value that will lead to the brightest
-color (yellow) in the waterfall.
+color (yellow) in the waterfall. If the \rett{Waterfall Automatic:} box is checked
+(see below), this spin button is grayed out and inactive.
 
 \rett{Waterfall Low:} This is the RX dBm value below which the waterfall will be black.
+If the \rett{Waterfall Automatic:} box is checked
+(see below), this spin button is grayed out and inactive.
 
-\rett{Waterfall Automatic:} If this box is checked, the \rett{Waterfall High} and
+\rett{Waterfall Automatic:} If this box is checked (as is the case in
+Fig. \ref{fig:DisplayMenu}), the \rett{Waterfall High} and
 \rett{Waterfall Low} controls are inactive and the values are not used. Instead,
 the lowest and highest signal strength in the RX spectrum are automaticall determined
 in each update of the waterfall, and these min/max values
@@ -1618,18 +1646,17 @@ and equalizer settings, and TX compressor settings
  to CWL/CWU where you will normally use different settings compared to both USB/LSB and DIGU.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\clearpage
 \section{The \texttt{Memory}  menu}
 
-The \bltt{Memory} menu gives you access to five memory slots. The menu is shown in Fig. \ref{fig:MemMenu}.
+The \bltt{Memory} menu gives you access to ten memory slots. The menu is shown in Fig. \ref{fig:MemMenu}.
 You can store the current
 operating frequency  of the active receiver in any of the five slots by clicking a
-button in the leftmost columns (e.g. "Store M2"), or you can restore
-data from any slot. Parameters stored in the memory slot are
-the frequency and the mode, the filter used, the deviation, and the CTCSS setting.
-The right column shows the frequency, the mode,
-and filter currently stored in the memory slot and clicking on of the five buttons there will restore
-the data. So if you have some often used frequencies (e.g. for a net), the
+button in the left column (e.g. "Store M2"), or you can restore
+data from any slot by clicking on one of the entries in the right column
+which shows the frequency, mode and filter width stored in that slot.
+In addition (not shown in the right column) the FM deviation and the CTCSS setting are stored
+in the memory slots.
+ So if you have some often used frequencies (e.g. for a net), the
 \bltt{Memory} menu allows you to become QRV there with only few mouse clicks.
 
  \begin{figure}[ht]
@@ -1690,13 +1717,31 @@ for some legacy HPSDR boards which had a switch-able RX preamp.
 \rett{Mute when not active}. If checked, the audio from this receiver is muted when
 it is not the active receiver.
 
-\rett{Mute audio}. If checked, the audio from this receiver is muted, no matter whether
+\rett{Mute Audio to Radio}. If checked, the audio from this receiver is muted, no matter whether
 it is active or not.
+
+\rett{Bypass ADC0 RX filters}. This box is only shown if the ALEX filter board
+is selected (see the \bltt{Radio} menu). If checked, the filters in the RF frontend for ADC0
+are by-passed during receive. This option will normally only used for radios that
+have band-pass filters in the front end, if one operates two receivers both running
+on ADC0 data on different bands. Without checking this option, only the signals for
+the band of the active receiver will pass. Older radios (up to ANAN-100/200)  have a
+combination of a low-pass and a high-pass filter in the RX path to ADC0. If these
+radios run two receivers, the low-pass filter is selected based on the higher
+of the two RX frequencies, and the high-pass filters is selected based on the
+lower one. This ensures that the signals for both receivers fall into  the filter
+pass band.
+
+\rett{Bypass ADC1 RX filters}. This box is only shown if the RF frontend for ADC1
+features a filter board (ANAN-7000/8000 and G2 radios),
+and if the ALEX filter board
+is selected (see the \bltt{Radio} menu). If checked, the filters in the RF frontend for ADC1
+are by-passed during receive.
 
 \rett{Local Audio Output:} If checked, the audio from this radio is sent to a local
 sound card (or virtual audio cable). The sound card itself is selected in the
-pop-down menu below this check box. One line below, one can select between
-\texttt{STEREO}, \texttt{LEFT} and \texttt{RIGHT}, and select whether the RX
+pop-down menu below this check box. One line further below, one can select between
+\texttt{Stereo}, \texttt{Left} and \texttt{Right}, and select whether the RX
 audio should be sent to both channels or to the left or right channel only.
 
 In the example shown, checking the Local Audio box would send the RX audio
@@ -2102,6 +2147,10 @@ and looks like in Fig. \ref{fig:PAMenuWatt}.
 \caption{The PA menu, Watt meter calibration}
 \label{fig:PAMenuWatt}
 \end{figure}
+Note that for calibrating the Watt meter as well, 
+ \rett{Tune use Drive} in the \bltt{TX} menu must be checked
+ to allow for high RF output
+power while TUNEing.
 
 You have 10 Watt values from $\frac{1}{10}$ to the full nominal power. Initially,
 the values of the spin buttons beside the Watt ratings have the nominal value.
@@ -2113,7 +2162,8 @@ interpolation between two adjacent calibration values.
 
 Start with resetting the value by hitting the \rett{Reset} button. Then, move the
 drive slider to 100 (the unit of the drive slider is per cent, not Watt!) and hit
-TUNE. After the PA calibration described above, your (external) Watt meter should
+\texttt{TUNE} in the toolbar.
+ After the PA calibration described above, your (external) Watt meter should
 show the nominal PA output power (e.g. 100 Watt for an ANAN-7000). Now look at the
 forward power reported in the meter section (top right of the piHPSDR window).
 Suppose you read "250 W" there although your output is 200 Watt. Then simply
@@ -2128,16 +2178,18 @@ calibration value of the highest power. For example, if you have entered 250 in
 the 200W spin button, then the value in the 100W spin button will read 125. So in a
 single shot, you have roughly calibrated the Watt meter.
 
-A finer calibration only makes sense if you have a highly accurate Watt meter. If you do,
+A finer calibration only makes sense if you have a highly accurate Watt meter, since
+the (uncalibrated) reading in piHPSDR may actually be more accurate than your
+Watt meter. Using your highly accurate Watt meter,
 you can now move the drive slider until your Watt meter exactly reads one of the
 lower power values, and use the corresponding spin button to change the calibration
-until piHPSDR exactly reports the correct power.
-
-The procedures is the virtually the same if our nominal output power is different.
+until piHPSDR exactly reports the correct power. 
+The procedures is  virtually the same if our nominal output power is different.
 The only complication arises if your radio has a nominal power that is not in the menu,
 for example 150 Watt.
 
-In this case, choose 200W in the top line of the PA menu. TUNE and move the drive
+In this case, choose 200W (the next largest value)
+in the top line of the PA menu. TUNE and move the drive
 slider until your Watt meter reads the largest value possible that occurs
 in the Watt meter calibration menu (in this example, it is 140W). Adjust the
 140W spin button until piHPSDR reports 140 Watt. Then go to full power
@@ -2316,9 +2368,12 @@ Many radios have a connection for a paddle or at least for
 a straight key, and contain firmware to do CW. CW handling by
 the radio firmware is enabled by the \rett{CW handled in Radio}
 check box. If unchecked, CW (that is, generating and forming
-the RF pulses) is done by piHPSDR, which implies that
+the RF pulses) is done by piHPSDR. For most radios, you can
+still use the Morse paddle connected to the radio since the
+radio sends the dash/dot paddle press events to the host
+computer, but it is more versatile to connect
 a Morse paddle, straight key or an external keyer is connected
-to the host compute (see Appendix \ref{sec:ConnectCW}).
+to the host computer (see Appendix \ref{sec:ConnectCW}).
 
 \rett{CW Speed}. Here the speed (in wpm) can be chosen. If CW is
 handled in the Radio, the value is simply sent to the radio firmware,
@@ -2507,6 +2562,41 @@ such as a beverage antenna which often has a better signal-to-noise
 switchable low-power TX output. This is enabled if \rett{Xvtr} is selected as the RX antenna of RX1.
 The connector used for low-power TX output can also be used for receiving.
 
+\begin{center}
+\fbox{
+\parbox{\textwidth - 1cm}{
+\begin{center}
+\textbf{\color{red} -------- Attention, potential damage! --------}
+\end{center}
+A problem that may potentially damage your external hardware occurs if
+you use one of the antennas Ant1/2/3 for receive and another for transmit.
+This is especially true if you have sensitive hardware (such as an
+active RX antenna) connected to
+the Ant jack used for RX and operate CW with the Key attached to the radio
+with the \rett{CW handled in Radio} box checked in the \bltt{CW} menu.
+
+In this case, starting CW transmission lets the FPGA (processing unit
+inside the radio) put the
+radio into TX mode, start forming the first RF pulse, and informs the
+host computer running piHPSDR that a RX/TX transition has been made.
+
+Only then, piHPSDR can start telling the radio to switch the relays that
+connect the Ant jacks with the TX circuitry.
+
+As as result, a small part (few milli-secs) of the first RF pulse (dot or dash)
+may appear at the Ant jack used for RX only. If, say, an active antenna is
+connected there, this may well destroy the active antenna.
+
+Even if not using CW this way, it cannot excluded that Ant relay switching
+is so slow that such ,,RF spikes'' appear at an Ant jack intended for RX
+only.
+
+\vspace{0.5cm}
+If possible, use the Ext1/Ext2/Xvtr jacks for connecting active RX antennas.
+
+}
+}
+\end{center}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3409,6 +3499,8 @@ filter is one of the two variable filters
 \action{Lock}{LOCK}{B}{Lock the VFOs. A locked VFO will not accept VFO frequency steps in either direction,
 and cannot be moved by dragging with the  mouse. Band changes etc.
 are still possible, though. The command is intended to guard against accidentally moving the VFO dial.}
+
+\action{Main Menu}{MAIN}{B}{Open the main menu.}
 
 \action{Memory Menu}{MEM}{B}{Open the \texttt{MEM} (Memory) menu.}
 
@@ -4560,8 +4652,146 @@ reduction facilities which are based on  \texttt{rnnnoise} and \texttt{libspecbl
  between the ,,distant'' radio and the ,,distant'' computer using a straight internet
  cable connection, while the user interface data is exchanged between the two copies of
  piHPSDR running on the two computers.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{GPIO Lines for Controllers, CW, PTT}
+\label{sec:gpio}
+This section is only for piHPSDR running on RaspberryPi or similar systems with a GPIO (general purpose
+input/output) header. piHPSDR uses \texttt{libgpiod} to access the GPIO, so this may also apply to
+other single-board computers with a GPIO.
+
+\begin{figure}[ht]
+\center
+\includegraphics[width=15cm]{GPIO.pdf}
+\caption{GPIO lines used with various controllers.}
+\label{fig:GPIO}
+\end{figure}
+
+Fig. \ref{fig:GPIO} lists which GPIO lines are used for which controller option. In the first column,
+the GPIO pin number (0--31) ist listed. The second column indicates the function often
+associated with this pin in the RaspberryPi community, and the third column states on which connector
+(P1 or P5) this pin can be found. P1 is the main 40-pin GPIO header of the RaspberryPI, while P5 is
+an auxiliary connector that carries pins one should normally not use (like those for a second I2C
+devices). The four last columns indicate the use of this GPIO pin in four different setups, namely
+with no controller, with the Controller1, with the Controller2 equipped with single encoders, and
+finally with the Controller2 equipped with double encoders. The last case is electrically identical to
+the G2 front panel. In red, with the string \texttt{do not use!}, GPIO pins are marked which one should
+not use from within piHPSDR for the case at hand. For the controllers, these are the pins associated
+with the I2C interface(s). If there is no controller, we could, in principle, use all GPIO pins at our
+discretion, but all those often used by other hardware are marked as not to use. This ensures that, 
+for example, piHPSDR even if compiled with the GPIO option will run smoothly together with additional
+hardware such as ,,audio hats''.
+
+The function of GPIO lines actually used by the controllers are indicated in black colour. No detailed
+explanation is needed since these are hard wired and one therefore should not change this assignment.
+
+Lines which are available but are not used by piHPSDR are marked as \texttt{available} in blue colour.
+Then there are up to four input lines (\texttt{CWL}, \texttt{CWR}, \texttt{CWKEY}, and \texttt{PTTIN})
+and two output lined (\texttt{PTTOUT}, \texttt{CWOUT}) which can be assigned to available (blue-coloured)
+GPIO lines. Shown in Fig. \ref{fig:GPIO} is the default assignment done in the program, but any of the
+six mentioned functions (to be explained below) can be mapped on any of the available (blue coloured)
+GPIO lines. Unfortunatedly, there is only a single available GPIO line for the Controller2 with double
+encoders and the G2 front panel, and only five available GPIO lines for Controller1, so it is not possible
+to assign all six possible functions to GPIO lines. The six additional functions are
+
+\rett{CWL} (Input with pullup, active low). This input triggers a "left paddle pressed/
+released" event for the
+iambic keyer built into piHPSDR. Note that to use the built-in iambic keyer, the checkbox 
+\bltt{CW handled in Radio} has to be unchecked. This input is typically connected to
+a Morse paddle key.
+
+\rett{CWR} (Input with pullup, active low). This input triggers a "right paddle pressed/
+released" event for the
+iambic keyer built into piHPSDR. Note that to use the built-in iambic keyer, the checkbox 
+\bltt{CW handled in Radio} has to be unchecked. This input is typically connected to
+a Morse paddle key.
 
 
+\rett{PTTIN} (Input with pullup, active low). This input triggers a "PTT on/off" signal.
+Not that it does not toggle the PTT state, but enforces PTT as long as the input is pulled low,
+and releases PTT when it goes high. This input is typically connected to the PTT button of
+a microphone or the PTT output of an external CW keyer.
+
+\rett{CWKEY} (Input with pullup, active low). This input triggers a "CW Key down" event. An
+RF pulse is emitted in CW mode as long as the input is pulled low and the radio in in TX state.
+This input is typically connected to the KEY output of an external CW keyer.  Note that  nothing
+happens if the radio is not put into TX mode beforehand. Therefore, to use an external CW keyer,
+one needs both a KEY and PTT connection to the keyer. To avoid chopping of the first Morse element
+(dot or dash), PTT should become active shortly before the first key-down event occurs (,,PTT
+lead-in time''). This lead-in time can normally be adjusted for external CW keyers, I mostly use
+150 msec to be on the safe side.
+
+\rett{PTTOUT} (Output, active low). This output indicates with a low level that piHPSDR is in the
+TX state. This output is typically used together with radios such as the Adalm Pluto to activate
+a RF amplifier, because there is no hardware output at the Adalm which indicates that the device
+transmits. The output can also be used to activate an external power amplifier if the radio has
+not PTT output.
+
+\rett{CWOUT} (Output, active low). This output monitors the state of the built-in iambic keyer
+(low = key down, high = key up), and can be used to drive external hardware with a tone generator
+that generates a low-latency side tone, mixes it with the RX audio output, and feeds the combined
+signal to the head phone. For direct keying (using the CWKEY line or the \bltt{CW KEY (keyer)}
+action via MIDI) this output also
+follows the key-down/up state.
+
+The reason for choosing ,,active low'' for the output lines is that in the default setup,
+the GPIO lines are switched
+to ,,input with pull-up'' upon booting. An input line with a built-in pullup
+resistor is, however, 
+nearly indistinguishable from an output line with high level.
+
+If you are not happy with the default assignment of the ,,extra'' GPIO lines, this can be changed
+but you have to modify the file \texttt{src/gpio.c} and recompile piHPSDR (there is no user interface
+for GPIO line assignment). To give an example, suppose you are using the Controller2 V2 (with double
+encoders) with an Adalm Pluto and need a hardware PTT out signal. This controller a single spare GPIO line
+(GPIO14) which by default is assigned to \rett{PTTIN}. Locate the function \texttt{gpio\_set\_defaults}
+in the source code file. It starts like this
+
+\begin{small}
+\begin{verbatim}
+void gpio_set_defaults(int ctrlr) {
+  t_print("%s: %d\n", __FUNCTION__, ctrlr);
+
+  switch (ctrlr) {
+  case CONTROLLER1:
+    //
+    // GPIO lines not used by controller: 9, 10, 11, 14, 15
+    //
+    CWL_LINE = 9;
+    CWR_LINE = 11;
+    CWKEY_LINE = 10; 
+    PTTIN_LINE = 14;
+    PTTOUT_LINE = 15;
+    CWOUT_LINE = -1;
+...    
+\end{verbatim}
+\end{small}
+
+You clearly see the default assignments for the Controller1 case (a negative value means ,,do not use'').
+If you scroll down, you will also find the assignments for the other cases (Controller2 V1, Controller 2 V2,
+G2 front panel, and ,,no controller''). The assignment for the Controller2 V2 (the version with double
+encoders) is only few lines below and reads
+
+\begin{small}
+\begin{verbatim}
+  case CONTROLLER2_V2:
+    //
+    // GPIO lines not used by controller: 14. Assigned to PTTIN 
+    //
+    CWL_LINE = -1;
+    CWR_LINE = -1;
+    PTTIN_LINE = 14;
+    CWKEY_LINE = -1;
+    PTTOUT_LINE = -1;
+...
+\end{verbatim}
+\end{small}
+
+To use GPIO14 for \texttt{PTTOUT}, simply modify the assignment such that the variable
+ \texttt{PTTIN\_LINE} is assigned the
+value \texttt{-1} and \texttt{PTTOUT\_LINE} gets the value \texttt{14}.
+ That's all except that you have to recompile
+simply by typing in the command ,,make'' in the piHPSDR directory (see Appendix \ref{sec:installsources}).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \chapter[RaspPi: Activating I2C]{RaspPi: Activating the I2C interface}

@@ -706,6 +706,8 @@ void *highprio_thread(void *data) {
   int yes = 1;
   int rc;
   unsigned long freq;
+  uint32_t u32;
+
   int i;
   int alex0_mod, alex1_mod, hp_mod;
   sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -914,10 +916,10 @@ void *highprio_thread(void *data) {
 
     // Store Alex0 and Alex1 bits in separate ints
     alex0_mod = alex1_mod = 0;
-    freq = (buffer[1428] << 24) + (buffer[1429] << 16) + (buffer[1430] << 8) + buffer[1431];
+    u32 = (buffer[1428] << 24) + (buffer[1429] << 16) + (buffer[1430] << 8) + buffer[1431];
 
     for (i = 0; i < 32; i++) {
-      rc = (freq >> i) & 0x01;
+      rc = (u32 >> i) & 0x01;
 
       if (rc != alex1[i]) {
         alex1[i] = rc;
@@ -928,13 +930,13 @@ void *highprio_thread(void *data) {
     }
 
     if (alex1_mod) {
-      t_print("HP: ALEX1 bits=0x%08lx\n", freq);
+      t_print("HP: ALEX1 bits=0x%08lx\n", u32);
     }
 
-    freq = (buffer[1432] << 24) + (buffer[1433] << 16) + (buffer[1434] << 8) + buffer[1435];
+    u32 = (buffer[1432] << 24) + (buffer[1433] << 16) + (buffer[1434] << 8) + buffer[1435];
 
     for (i = 0; i < 32; i++) {
-      rc = (freq >> i) & 0x01;
+      rc = (u32 >> i) & 0x01;
 
       if (rc != alex0[i]) {
         alex0[i] = rc;
@@ -945,7 +947,7 @@ void *highprio_thread(void *data) {
     }
 
     if (alex0_mod) {
-      t_print("HP: ALEX0 bits=0x%08lx\n", freq);
+      t_print("HP: ALEX0 bits=0x%08lx\n", u32);
     }
 
     rc = buffer[1442];
@@ -995,6 +997,7 @@ void *highprio_thread(void *data) {
   watchdog = 0;
   highprio_thread_id = 0;
   close(sock);
+  highprio_thread_id = 0;
   return NULL;
 }
 
@@ -1411,7 +1414,7 @@ void *tx_thread(void * data) {
     // and thus txlevel = txdrv_dbl^2
     //
     txlevel = sum * txdrv_dbl * txdrv_dbl * 0.0041667;
-#ifdef PACKET_LIST
+#ifdef PACKETLIST
     t_print("TXIQ-SUM=%ld\n", lsum);
 #endif
   }
@@ -1479,7 +1482,16 @@ void *send_highprio_thread(void *data) {
     rc = (int) ((4095.0 / c1) * sqrt(maxpwr * txlevel * c2));
     *p++ = (rc >> 8) & 0xFF;
     *p++ = (rc     ) & 0xFF;
-    buffer[49] = 63; // about 13 volts supply
+    buffer[49] = 4; // SupplyVolts = 0
+    buffer[50] = 0;
+    buffer[51] = 0; // ADC3 = 0
+    buffer[52] = 0;
+    buffer[53] = 0; // ADC2 = 0
+    buffer[54] = 0;
+    buffer[55] = ptt ? 4 : 2; // ADC1 = 1024(TX), 512(RX)
+    buffer[56] = 0;
+    buffer[57] = ptt ? 3 : 2; // ADC0 = 768(TX), 512(RX)
+    buffer[58] = 0;
 
     if (sendto(sock, buffer, 60, 0, (struct sockaddr * )&addr_new, sizeof(addr_new)) < 0) {
       t_perror("***** ERROR: HP send thread sendto");
@@ -1565,7 +1577,7 @@ void *audio_thread(void *data) {
     }
 
     // just skip the audio samples
-#ifdef PACKET_LIST
+#ifdef PACKETLIST
     lsum = 0;
     for (int  i=4; i<260; i++) {
       lsum = lsum + buffer[i]*buffer[i];
